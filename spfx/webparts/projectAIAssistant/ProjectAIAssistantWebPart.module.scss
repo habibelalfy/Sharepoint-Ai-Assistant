@@ -1,0 +1,47 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.history {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.userMessage,
+.assistantMessage {
+  margin: 8px 0;
+  padding: 8px;
+  border-radius: 4px;
+}
+
+.userMessage {
+  background-color: '[theme: themeLighter, default: #deecf9]';
+}
+
+.assistantMessage {
+  background-color: '[theme: neutralLighter, default: #f3f2f1]';
+}
+
+.messageText {
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+}
+
+.inputRow {
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+}
+
+.input {
+  flex: 1;
+}
+
+.error {
+  color: '[theme: errorText, default: #a4262c]';
+  padding: 8px;
+}

@@ -1,0 +1,9 @@
+{
+  "servers": {
+    "sharepoint-ai-assistant": {
+      "command": "node",
+      "args": ["dist/server.js"],
+      "env": {}
+    }
+  }
+}

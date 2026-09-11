@@ -1,0 +1,50 @@
+{
+  "name": "sharepoint-ai-assistant",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI Project Management Assistant for SharePoint Server (on-premises) using the Model Context Protocol (MCP).",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "main": "dist/server.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "node dist/server.js",
+    "start:gateway": "node dist/api/mcp-http-server.js",
+    "generate:prompt": "npm run build && node dist/prompts/generate-system-prompt.js",
+    "smoke:test": "npm run build && node scripts/smoke-test.mjs",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write \"**/*.{ts,js,mjs,cjs,json,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,js,mjs,cjs,json,md}\"",
+    "test": "jest --passWithNoTests",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "axios": "^1.20.0",
+    "axios-ntlm": "^1.4.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "node-cron": "^4.6.0",
+    "pino": "^10.3.1",
+    "zod": "^4.6.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/express": "^5.0.6",
+    "@types/node": "^20.19.43",
+    "axios-mock-adapter": "^2.1.0",
+    "eslint": "^10.10.0",
+    "eslint-config-prettier": "^10.1.8",
+    "jest": "^30.5.1",
+    "nock": "^14.0.17",
+    "prettier": "^3.9.6",
+    "ts-jest": "^29.4.12",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.70.0"
+  }
+}
