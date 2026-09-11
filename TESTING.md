@@ -16,10 +16,10 @@ Coverage thresholds are enforced in `jest.config.js`. Current aggregate:
 
 | Metric     | %     |
 | ---------- | ----- |
-| Statements | 87.4% |
-| Lines      | 87.9% |
-| Functions  | 87.0% |
-| Branches   | 72.8% |
+| Statements | 86.4% |
+| Lines      | 87.0% |
+| Functions  | 85.8% |
+| Branches   | 72.9% |
 
 The three core business-logic modules named in the build prompt are held at
 ≥ 80% statements/lines:
@@ -34,6 +34,14 @@ Branch coverage is lower overall because the Kerberos (SPNEGO) interceptor in
 `src/sharepoint/auth.ts` and the stdio/gateway process bootstraps require a real
 domain/host and are covered by integration/smoke tests rather than unit tests.
 
+## RAG unit tests
+
+The RAG subsystem (`src/rag/*`) is tested with a **mock embedding provider** and a
+**mocked `pg` pool** — no live containers are required. `test/rag/` covers
+chunking, permission filtering on retrieved chunks, incremental-sync change
+detection (ETag), the embedding-dimension startup check, the pgvector store's
+SQL, and the `search_documents` tool handler (`test/tools/`).
+
 ## Integration tests
 
 `test/integration/tool-flow.test.ts` exercises the **full tool-call flow** against
@@ -46,7 +54,7 @@ project+task+milestone fetch.
 
 Confirm each item against a configured `.env` and reachable SharePoint farm.
 
-### Tools (13)
+### Tools (14)
 
 | #   | Tool                         | Verify                                                  |
 | --- | ---------------------------- | ------------------------------------------------------- |
@@ -63,8 +71,9 @@ Confirm each item against a configured `.env` and reachable SharePoint farm.
 | 11  | `get_escalations_by_project` | Lists escalations, optionally by status.                |
 | 12  | `get_audit_logs`             | Returns redacted `AI_AuditLog` rows with filters.       |
 | 13  | `get_user_permissions`       | Returns a user's AD groups + accessible projects.       |
+| 14  | `search_documents`           | Returns cited, permission-filtered document chunks.     |
 
-### Features (9)
+### Features (10)
 
 | #   | Feature                           | Verify                                                                                          |
 | --- | --------------------------------- | ----------------------------------------------------------------------------------------------- |
@@ -77,10 +86,11 @@ Confirm each item against a configured `.env` and reachable SharePoint farm.
 | 7   | Milestone delay analysis          | Tool 7 returns cascading impact.                                                                |
 | 8   | Escalation lifecycle tools        | Tools 9–11 cover open → update → list.                                                          |
 | 9   | Audit logging & compliance        | Tool 12 shows redacted audit entries; `AUTH_FAILURE` events are logged.                         |
+| 10  | Document semantic search (RAG)    | Tool 14 returns relevant, permission-filtered chunks with citations.                            |
 
 ## Smoke test
 
 `npm run smoke:test` boots the MCP server (stdio) and the gateway, asserts
-`tools/list` returns all 13 tools, and performs one representative tool call
+`tools/list` returns all 14 tools, and performs one representative tool call
 (`get_user_permissions`) through both paths. It requires `npm run build` and a
 working `.env`.

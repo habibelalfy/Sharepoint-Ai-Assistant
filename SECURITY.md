@@ -137,3 +137,17 @@ node dist/server.js
 The same injection pattern applies to Azure Key Vault, AWS Secrets Manager, or any
 hosting platform's secret store. See `docs/deployment.md` §1.3 for the service
 wiring.
+
+## 8. RAG document-search boundary
+
+The RAG subsystem (`src/rag/`) never crosses Kerberos into the containers — the
+app↔container boundary is plain HTTP (embedding server) and the Postgres wire
+protocol (pgvector) only, and no call targets a public cloud endpoint:
+
+- Every `search_documents` call is audit-logged exactly like other tools
+  (`logAIAction` via the shared `withAudit` wrapper, plus one `logDataAccess` per
+  cited chunk source).
+- Retrieved chunks are filtered through
+  `PermissionService.filterByPermissions` **before** reaching the model prompt.
+- The embedding server is reached with a placeholder key (`EMBEDDING_API_KEY`) and
+  is firewalled to the Node host only (see `docs/deployment.md` §2).

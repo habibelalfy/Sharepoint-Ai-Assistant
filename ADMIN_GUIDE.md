@@ -84,3 +84,57 @@ shows a caller's AD groups and the projects they can see.
 Never put real credentials in `.env` in production. Source them from DPAPI, a
 vault, or the host's secret store — see [`SECURITY.md`](SECURITY.md) §7 and
 [`docs/deployment.md`](docs/deployment.md).
+
+## 8. Document search (RAG)
+
+Phase 8 adds semantic search over document libraries. It is **optional and
+additive** — the structured-data tools are unchanged.
+
+### 8.1 Document library columns
+
+For permission-aware retrieval, add the same **`PermittedGroups`** column
+(multiple lines of text) to each document library and put AD group names in it:
+
+- **Empty** → the document is public.
+- **Non-empty** → visible only to users in at least one listed group.
+
+Optionally add a **`ProjectId`** column (number, or lookup → Projects) to scope
+documents to a project; `search_documents` accepts an optional `projectId` filter
+using it.
+
+### 8.2 Containers
+
+Run the two on-premises containers:
+
+```bash
+docker compose -f docker-compose.addendum.yml up -d
+```
+
+- `pgvector` — PostgreSQL + pgvector (port 5432).
+- `embedding-server` — text-embeddings-inference serving `BAAI/bge-large-en-v1.5`
+  (port 8080).
+
+The app talks to them over plain HTTP/Postgres only — **no Kerberos crosses that
+boundary**, and no request ever reaches a public cloud endpoint.
+
+### 8.3 Configuration
+
+Set in `.env`:
+
+- `PGVECTOR_CONNECTION_STRING` and `EMBEDDING_API_BASE_URL` — **both** required to
+  enable RAG (setting only one fails fast at startup; setting neither disables it).
+- `RAG_INDEX_SCHEDULE` — indexer cron (default nightly `0 2 * * *`).
+- `RAG_CHUNK_SIZE` / `RAG_CHUNK_OVERLAP` — text chunking.
+- `EMBEDDING_MODEL_NAME` / `EMBEDDING_DIMENSIONS` — model + vector width (defaults
+  `bge-large-en-v1.5` / `1024`).
+
+At startup the server embeds a probe string and fails fast if the returned vector
+width does not match `EMBEDDING_DIMENSIONS`.
+
+### 8.4 The indexer
+
+The indexer runs inside the **same Node process** as the alert scheduler. Each run
+it enumerates document libraries, walks folders recursively, and re-indexes only
+files whose `ETag`/`TimeLastModified` changed (deleted files are removed). It
+extracts text from PDF, DOCX, PPTX, and plain-text files, then chunks, embeds, and
+upserts into pgvector.

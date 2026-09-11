@@ -7,15 +7,16 @@ the SharePoint web part.
 
 ## What you can ask
 
-| Capability         | Example questions                                                    |
-| ------------------ | -------------------------------------------------------------------- |
-| **Query data**     | "Show all tasks for project Alpha", "List milestones due next week". |
-| **Search**         | "Find projects about the customer portal".                           |
-| **Project detail** | "Give me the full picture for project 12".                           |
-| **Plan health**    | "How healthy is project 12?", "What's holding project Alpha back?".  |
-| **Delay impact**   | "If milestone 5 slips 10 days, what else is affected?".              |
-| **Statistics**     | "What's the progress and estimated completion for project 12?".      |
-| **Escalations**    | "Open a High-priority escalation for project 12: budget overrun".    |
+| Capability          | Example questions                                                                                   |
+| ------------------- | --------------------------------------------------------------------------------------------------- |
+| **Query data**      | "Show all tasks for project Alpha", "List milestones due next week".                                |
+| **Search**          | "Find projects about the customer portal".                                                          |
+| **Project detail**  | "Give me the full picture for project 12".                                                          |
+| **Plan health**     | "How healthy is project 12?", "What's holding project Alpha back?".                                 |
+| **Delay impact**    | "If milestone 5 slips 10 days, what else is affected?".                                             |
+| **Statistics**      | "What's the progress and estimated completion for project 12?".                                     |
+| **Escalations**     | "Open a High-priority escalation for project 12: budget overrun".                                   |
+| **Document search** | "What does the charter say about success criteria?", "Summarize the status reports for project 12". |
 
 The assistant works from the live data in SharePoint, so answers reflect the lists
 as they are right now.
@@ -31,6 +32,20 @@ You can say things like:
 
 Escalations are written to the **Escalations** list, so they show up in SharePoint
 alongside your other project data.
+
+## Document search
+
+If your administrator has enabled document search (RAG), you can ask about the
+contents of documents in SharePoint libraries — charters, contracts, status
+reports, meeting notes:
+
+- "What does the project charter say about the success criteria?"
+- "Find the contract terms about late-payment penalties."
+- "Summarize the status reports for project 12."
+
+Answers quote the relevant passages and cite the source document and library. As
+with everything else, you only see documents your AD groups are allowed to view —
+the assistant never reveals restricted material.
 
 ## Permissions
 

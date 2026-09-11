@@ -62,6 +62,24 @@ In production, source secrets from a store rather than a plaintext `.env`:
 The app only ever reads `process.env` (see `src/config.ts`), so any of these can
 feed it without code changes.
 
+### 1.4 RAG containers (document search)
+
+Document search (RAG) is optional. To enable it, run two containers on a host
+reachable from the Node service (not necessarily the SharePoint host):
+
+```bash
+docker compose -f docker-compose.addendum.yml up -d
+```
+
+- `pgvector` — `pgvector/pgvector:pg16` (PostgreSQL + pgvector, port 5432).
+- `embedding-server` — `ghcr.io/huggingface/text-embeddings-inference:cpu-latest`
+  serving `BAAI/bge-large-en-v1.5` (port 8080).
+
+Then set `PGVECTOR_CONNECTION_STRING` and `EMBEDDING_API_BASE_URL` in the app's
+environment. The app runs a **dimension check** at startup and fails fast on a
+mismatch; the indexer runs on `RAG_INDEX_SCHEDULE` inside the same process as the
+alert jobs.
+
 ## 2. SSL termination & firewall
 
 - **Terminate TLS at a reverse proxy** (IIS ARR, nginx, or a load balancer) in
@@ -73,6 +91,8 @@ feed it without code changes.
     servers, never directly to the internet.
   - SharePoint REST (`SHAREPOINT_SITE_URL`, typically 80/443) — open **only** from
     the Node host to the SharePoint farm.
+  - pgvector (5432) and embedding server (8080) — open **only** from the Node
+    host, never to the internet.
   - Block all other inbound traffic on the Node host.
 
 ## 3. Health checks & monitoring

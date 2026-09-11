@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "AI Project Management Assistant for SharePoint Server (on-premises) using the Model Context Protocol (MCP).",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "engines": {
     "node": ">=20.0.0"
   },

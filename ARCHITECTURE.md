@@ -1,6 +1,6 @@
 # Architecture — SharePoint AI Project Management Assistant
 
-> Status: **Phase 7** (testing, hardening & production deployment). Last updated: 2026-09-11.
+> Status: **Phase 8** (RAG — retrieval-augmented generation over document libraries). Last updated: 2026-09-11.
 
 ## 1. Overview
 
@@ -14,6 +14,11 @@ The system is deliberately layered so that **all SharePoint I/O flows through a
 single `SharePointClient`**, isolating authentication and transport so they can
 be swapped (e.g. NTLM → Kerberos, or a different HTTP adapter) without touching
 business logic.
+
+Phase 8 adds an **additive RAG subsystem** (`src/rag/`) that indexes unstructured
+documents from SharePoint document libraries into a self-hosted pgvector store and
+exposes semantic search with citations via `search_documents`. See
+[`RAG_ARCHITECTURE.md`](RAG_ARCHITECTURE.md) for its dedicated design.
 
 ## 2. System context
 
@@ -34,6 +39,11 @@ business logic.
                                                                └───────────────────────┘
 ```
 
+RAG (Phase 8) adds two on-premises containers reachable from the MCP server over
+plain HTTP/Postgres — **no Kerberos crosses that boundary and no request leaves
+the network**: a **pgvector** (PostgreSQL) store and a
+**text-embeddings-inference** embedding server.
+
 Two consumption paths exist, both terminating at the same MCP server:
 
 - **stdio** — for desktop MCP clients (Claude Desktop, VS Code).
@@ -46,7 +56,8 @@ Two consumption paths exist, both terminating at the same MCP server:
 ```
 Sharepoint-Ai-Assistant/
 ├── docs/
-│   └── build-prompt.md            # The phased build prompt this repo implements
+│   ├── build-prompt.md            # The phased build prompt this repo implements
+│   └── deployment.md              # Production deployment guide — Phase 7
 ├── src/                           # TypeScript source (compiles to dist/)
 │   ├── server.ts                  # MCP server entry (stdio bootstrap) — Phase 1
 │   ├── config.ts                  # Typed, env-driven config (fail-fast) — Phase 1
@@ -56,9 +67,10 @@ Sharepoint-Ai-Assistant/
 │   ├── services/                  # Business logic (health, alerts, perms…) — Phase 3+
 │   ├── mappers/                   # SharePoint OData → clean JSON — Phase 2
 │   ├── api/                       # HTTP gateway (Express) — Phase 6
+│   ├── rag/                        # RAG: indexer, embeddings, pgvector, retrieval — Phase 8
 │   └── types/                     # Shared domain + wire types — all phases
 ├── test/                          # Jest tests mirroring src/
-│   ├── sharepoint/  tools/  services/  mappers/  api/  types/
+│   ├── sharepoint/  tools/  services/  mappers/  api/  rag/  types/
 ├── spfx/                          # SPFx web part (Yeoman scaffold) — Phase 6
 ├── package.json
 ├── tsconfig.json                  # Base (type-check src + test, no emit)
@@ -67,6 +79,9 @@ Sharepoint-Ai-Assistant/
 ├── eslint.config.mjs
 ├── .prettierrc.json
 ├── .env.example
+├── sql/                           # pgvector schema migration — Phase 8
+├── docker-compose.addendum.yml    # pgvector + embedding-server containers — Phase 8
+├── RAG_ARCHITECTURE.md            # RAG pipeline, schema & topology — Phase 8
 └── ARCHITECTURE.md                # This file
 ```
 
@@ -79,18 +94,21 @@ Sharepoint-Ai-Assistant/
 
 ## 4. Technology & dependency decisions
 
-| Concern     | Choice                                                     | Rationale                                                                                                                                                                              |
-| ----------- | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Runtime     | Node.js ≥ 20                                               | Confirmed decision (raised from the spec's 18 floor). Node 20/22 LTS recommended in production.                                                                                        |
-| Language    | TypeScript **~5.9.x** (strict)                             | Pinned to 5.x deliberately: `typescript@latest` is now 7.x, which `ts-jest` (`<7`) and `typescript-eslint` (`<6.1`) do not yet support.                                                |
-| MCP         | `@modelcontextprotocol/sdk` ^1.30                          | Official SDK; supports stdio + HTTP transports.                                                                                                                                        |
-| HTTP client | `axios` ^1.20 + Kerberos/SPNEGO adapter (Phase 1)          | axios for REST; Kerberos (SPNEGO) is the primary auth. `axios-ntlm` ^1.4 is retained for NTLM fallback; the SPNEGO adapter (`kerberos` or `node-expose-sspi`) is finalized in Phase 1. |
-| Validation  | `zod` ^4.6                                                 | MCP SDK peer dependency (`^3.25                                                                                                                                                        |     | ^4`); every tool parameter is schema-validated. |
-| Logging     | `pino` ^10.3                                               | Structured JSON with correlation IDs; stdout-friendly for log shippers.                                                                                                                |
-| Scheduling  | `node-cron` ^4.6                                           | Latest major; requires Node ≥ 20 (now satisfied).                                                                                                                                      |
-| Gateway     | `express` ^5.2                                             | HTTP gateway for the SPFx web part (Phase 6).                                                                                                                                          |
-| Tests       | `jest` ^30.5 + `ts-jest` ^29.4                             | ts-jest 29.4 supports Jest 30 and TS `<7`.                                                                                                                                             |
-| Lint/format | `eslint` ^10 + `typescript-eslint` ^8.70 + `prettier` ^3.9 | Standard enterprise Node config (flat ESLint config).                                                                                                                                  |
+| Concern      | Choice                                                     | Rationale                                                                                                                                                                              |
+| ------------ | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Runtime      | Node.js ≥ 20                                               | Confirmed decision (raised from the spec's 18 floor). Node 20/22 LTS recommended in production.                                                                                        |
+| Language     | TypeScript **~5.9.x** (strict)                             | Pinned to 5.x deliberately: `typescript@latest` is now 7.x, which `ts-jest` (`<7`) and `typescript-eslint` (`<6.1`) do not yet support.                                                |
+| MCP          | `@modelcontextprotocol/sdk` ^1.30                          | Official SDK; supports stdio + HTTP transports.                                                                                                                                        |
+| HTTP client  | `axios` ^1.20 + Kerberos/SPNEGO adapter (Phase 1)          | axios for REST; Kerberos (SPNEGO) is the primary auth. `axios-ntlm` ^1.4 is retained for NTLM fallback; the SPNEGO adapter (`kerberos` or `node-expose-sspi`) is finalized in Phase 1. |
+| Validation   | `zod` ^4.6                                                 | MCP SDK peer dependency (`^3.25                                                                                                                                                        |     | ^4`); every tool parameter is schema-validated. |
+| Logging      | `pino` ^10.3                                               | Structured JSON with correlation IDs; stdout-friendly for log shippers.                                                                                                                |
+| Scheduling   | `node-cron` ^4.6                                           | Latest major; requires Node ≥ 20 (now satisfied).                                                                                                                                      |
+| Gateway      | `express` ^5.2                                             | HTTP gateway for the SPFx web part (Phase 6).                                                                                                                                          |
+| Embeddings   | `openai` ^7 (SDK, `baseURL` → TEI)                         | Official SDK pointed at the self-hosted text-embeddings-inference server (`BAAI/bge-large-en-v1.5`); no public-cloud endpoint (Phase 8).                                               |
+| Vector store | `pg` + pgvector (`pgvector/pgvector:pg16`)                 | Parameterized SQL, HNSW index (`vector_cosine_ops`); no ORM (Phase 8).                                                                                                                 |
+| Extraction   | `pdf-parse` + `mammoth` + `officeparser`                   | PDF/DOCX/PPTX text extraction for the RAG indexer (Phase 8).                                                                                                                           |
+| Tests        | `jest` ^30.5 + `ts-jest` ^29.4                             | ts-jest 29.4 supports Jest 30 and TS `<7`.                                                                                                                                             |
+| Lint/format  | `eslint` ^10 + `typescript-eslint` ^8.70 + `prettier` ^3.9 | Standard enterprise Node config (flat ESLint config).                                                                                                                                  |
 
 ### Module system
 
@@ -158,6 +176,16 @@ services. Integration tests mock the SharePoint HTTP server with **nock**
 (`test/integration/`); a smoke test (`npm run smoke:test`) exercises the real
 stdio server + gateway end-to-end. Coverage thresholds are enforced via
 `npm run test:coverage`.
+
+### ADR-008 — RAG on self-hosted pgvector + text-embeddings-inference
+
+Document search (Phase 8) is an **additive, on-premises** subsystem: the indexer
+runs inside the existing process, chunks are stored in a self-hosted
+**PostgreSQL + pgvector** container, and embeddings come from a self-hosted
+**text-embeddings-inference** container (`BAAI/bge-large-en-v1.5`, 1024-dim). No
+request may target a public cloud endpoint. Retrieval reuses the existing
+`PermissionService` (filter before the model) and `AuditService` (same log shape).
+See [`RAG_ARCHITECTURE.md`](RAG_ARCHITECTURE.md).
 
 ## 7. Engineering standards (apply to every phase)
 
