@@ -45,7 +45,12 @@ export class SharePointError extends AppError {
   public readonly statusCode: number;
   public readonly body: unknown;
 
-  public constructor(message: string, statusCode: number, body: unknown, options?: AppErrorOptions) {
+  public constructor(
+    message: string,
+    statusCode: number,
+    body: unknown,
+    options?: AppErrorOptions,
+  ) {
     super(message, options);
     this.statusCode = statusCode;
     this.body = body;
@@ -61,6 +66,27 @@ export class ValidationError extends AppError {
 
 /** Thrown when a user lacks permission for the requested action. */
 export class PermissionError extends AppError {
+  public constructor(message: string, options?: AppErrorOptions) {
+    super(message, options);
+  }
+}
+
+/** Thrown when the self-hosted embedding provider fails or returns a wrong-sized vector. */
+export class EmbeddingProviderError extends AppError {
+  public constructor(message: string, options?: AppErrorOptions) {
+    super(message, options);
+  }
+}
+
+/** Thrown when document text extraction fails (e.g. corrupt or unsupported file). */
+export class ExtractionError extends AppError {
+  public constructor(message: string, options?: AppErrorOptions) {
+    super(message, options);
+  }
+}
+
+/** Thrown when the pgvector store cannot fulfill an operation. */
+export class VectorStoreError extends AppError {
   public constructor(message: string, options?: AppErrorOptions) {
     super(message, options);
   }

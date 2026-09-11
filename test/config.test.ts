@@ -91,3 +91,65 @@ describe('loadConfig', () => {
     expect(() => loadConfig({ ...validEnv, SMTP_HOST: 'smtp.corp.com' })).toThrow(/SMTP_FROM/);
   });
 });
+
+describe('loadConfig RAG', () => {
+  const ragEnv = {
+    EMBEDDING_API_BASE_URL: 'http://localhost:8080/v1',
+    PGVECTOR_CONNECTION_STRING: 'postgres://ai:secret@localhost:5432/rag',
+  };
+
+  it('disables RAG by default and applies defaults', () => {
+    const config = loadConfig(validEnv);
+    expect(config.rag.enabled).toBe(false);
+    expect(config.rag.schedule).toBe('0 2 * * *');
+    expect(config.rag.chunkSize).toBe(1000);
+    expect(config.rag.chunkOverlap).toBe(200);
+    expect(config.rag.embeddingModelName).toBe('bge-large-en-v1.5');
+    expect(config.rag.embeddingDimensions).toBe(1024);
+  });
+
+  it('enables RAG when both services are configured', () => {
+    const config = loadConfig({ ...validEnv, ...ragEnv });
+    expect(config.rag.enabled).toBe(true);
+    expect(config.rag.embeddingApiBaseUrl).toBe('http://localhost:8080/v1');
+    expect(config.rag.pgvectorConnectionString).toBe('postgres://ai:secret@localhost:5432/rag');
+  });
+
+  it('throws when only one of the two RAG services is configured', () => {
+    expect(() => loadConfig({ ...validEnv, EMBEDDING_API_BASE_URL: 'http://x' })).toThrow(
+      /EMBEDDING_API_BASE_URL/,
+    );
+    expect(() => loadConfig({ ...validEnv, PGVECTOR_CONNECTION_STRING: 'postgres://x' })).toThrow(
+      /PGVECTOR_CONNECTION_STRING/,
+    );
+  });
+
+  it('reads custom chunking/schedule/model from env', () => {
+    const config = loadConfig({
+      ...validEnv,
+      ...ragEnv,
+      RAG_INDEX_SCHEDULE: '0 4 * * *',
+      RAG_CHUNK_SIZE: '500',
+      RAG_CHUNK_OVERLAP: '50',
+      EMBEDDING_MODEL_NAME: 'custom-model',
+      EMBEDDING_DIMENSIONS: '768',
+    });
+    expect(config.rag.schedule).toBe('0 4 * * *');
+    expect(config.rag.chunkSize).toBe(500);
+    expect(config.rag.chunkOverlap).toBe(50);
+    expect(config.rag.embeddingModelName).toBe('custom-model');
+    expect(config.rag.embeddingDimensions).toBe(768);
+  });
+
+  it('rejects a non-positive chunk size', () => {
+    expect(() => loadConfig({ ...validEnv, ...ragEnv, RAG_CHUNK_SIZE: '0' })).toThrow(
+      /RAG_CHUNK_SIZE/,
+    );
+  });
+
+  it('rejects a chunk overlap >= chunk size', () => {
+    expect(() =>
+      loadConfig({ ...validEnv, ...ragEnv, RAG_CHUNK_SIZE: '100', RAG_CHUNK_OVERLAP: '100' }),
+    ).toThrow(/RAG_CHUNK_OVERLAP/);
+  });
+});

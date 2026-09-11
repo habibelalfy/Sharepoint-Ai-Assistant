@@ -20,7 +20,7 @@ dotenv.config({ quiet: true });
 
 const GATEWAY_PORT = Number(process.env.HTTP_GATEWAY_PORT ?? 3001);
 const SECRET = process.env.JWT_SIGNING_KEY ?? 'changeme';
-const EXPECTED_TOOL_COUNT = 13;
+const EXPECTED_TOOL_COUNT = 14;
 
 /** Mints an HMAC-signed JWT-style token (same format the gateway verifies). */
 function signToken(claims) {

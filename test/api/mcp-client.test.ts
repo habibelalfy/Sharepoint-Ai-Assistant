@@ -11,7 +11,7 @@ describe('createMcpToolCaller', () => {
 
     const tools = await caller.listTools();
     const names = tools.map((tool) => tool.name);
-    expect(names).toHaveLength(13);
+    expect(names).toHaveLength(14);
     expect(names).toContain('query_project_data');
     expect(names).toContain('get_audit_logs');
     expect(names).toContain('get_user_permissions');

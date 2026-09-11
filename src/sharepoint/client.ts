@@ -58,6 +58,35 @@ interface SharePointItemResponse {
   d?: unknown;
 }
 
+/** A SharePoint document library (list template 101). */
+export interface SharePointLibraryInfo {
+  Id?: number;
+  Title?: string;
+  RootFolder?: { ServerRelativeUrl?: string };
+}
+
+/** The list item backing a document file (permission/project metadata). */
+export interface SharePointFileListItem {
+  PermittedGroups?: { results?: string[] } | string[];
+  ProjectId?: number;
+}
+
+/** A file in a document library folder. */
+export interface SharePointFileInfo {
+  Name?: string;
+  ServerRelativeUrl?: string;
+  TimeLastModified?: string;
+  ETag?: string;
+  UniqueId?: string;
+  ListItemAllFields?: SharePointFileListItem;
+}
+
+/** A sub-folder in a document library. */
+export interface SharePointSubFolderInfo {
+  Name?: string;
+  ServerRelativeUrl?: string;
+}
+
 /** Extracts SharePoint's verbose error message (`odata.error.message.value`). */
 function extractSharePointMessage(data: unknown): string | undefined {
   if (typeof data !== 'object' || data === null) {
@@ -91,7 +120,9 @@ function isRetryable(error: unknown): boolean {
 function toSharePointError(error: unknown): SharePointError {
   if (axios.isAxiosError(error) && error.response) {
     const message = extractSharePointMessage(error.response.data) ?? error.message;
-    return new SharePointError(message, error.response.status, error.response.data, { cause: error });
+    return new SharePointError(message, error.response.status, error.response.data, {
+      cause: error,
+    });
   }
   if (error instanceof Error) {
     return new SharePointError(error.message, 0, undefined, { cause: error });
@@ -133,7 +164,11 @@ export class SharePointClient {
     );
     const digest = response.data?.d?.GetContextWebInformation?.FormDigestValue;
     if (!digest) {
-      throw new SharePointError('Request digest missing from context info response', response.status, response.data);
+      throw new SharePointError(
+        'Request digest missing from context info response',
+        response.status,
+        response.data,
+      );
     }
     return digest;
   }
@@ -199,6 +234,69 @@ export class SharePointClient {
     return response.data?.d;
   }
 
+  /**
+   * Lists the site's document libraries (list template 101).
+   */
+  public async listDocumentLibraries(): Promise<SharePointLibraryInfo[]> {
+    const response = await this.request(() =>
+      this.http.get<SharePointListResponse>(`${this.siteUrl}/_api/web/lists`, {
+        params: {
+          $filter: 'BaseTemplate eq 101',
+          $select: 'Id,Title,RootFolder/ServerRelativeUrl',
+          $expand: 'RootFolder',
+        },
+      }),
+    );
+    return (response.data?.d?.results ?? []) as SharePointLibraryInfo[];
+  }
+
+  /**
+   * Lists files directly inside a document-library folder (server-relative URL).
+   *
+   * Includes change-detection metadata (`ETag`, `TimeLastModified`) plus the
+   * backing list item's permission/project columns for the RAG indexer.
+   */
+  public async listFilesInFolder(folderServerRelativeUrl: string): Promise<SharePointFileInfo[]> {
+    const response = await this.request(() =>
+      this.http.get<SharePointListResponse>(this.buildFolderUrl(folderServerRelativeUrl, 'Files'), {
+        params: {
+          $select:
+            'Name,ServerRelativeUrl,TimeLastModified,ETag,UniqueId,' +
+            'ListItemAllFields/PermittedGroups,ListItemAllFields/ProjectId',
+          $expand: 'ListItemAllFields',
+        },
+      }),
+    );
+    return (response.data?.d?.results ?? []) as SharePointFileInfo[];
+  }
+
+  /**
+   * Lists sub-folders directly inside a document-library folder.
+   */
+  public async listSubFolders(folderServerRelativeUrl: string): Promise<SharePointSubFolderInfo[]> {
+    const response = await this.request(() =>
+      this.http.get<SharePointListResponse>(
+        this.buildFolderUrl(folderServerRelativeUrl, 'Folders'),
+        {
+          params: { $select: 'Name,ServerRelativeUrl' },
+        },
+      ),
+    );
+    return (response.data?.d?.results ?? []) as SharePointSubFolderInfo[];
+  }
+
+  /**
+   * Downloads a file's raw bytes from its server-relative URL.
+   */
+  public async getFileContent(serverRelativeUrl: string): Promise<Buffer> {
+    const escaped = serverRelativeUrl.replace(/'/g, "''");
+    const url = `${this.siteUrl}/_api/web/GetFileByServerRelativeUrl('${escaped}')/$value`;
+    const response = await this.request(() =>
+      this.http.get<ArrayBuffer>(url, { responseType: 'arraybuffer' }),
+    );
+    return Buffer.from(response.data);
+  }
+
   /** Caches a request digest for the lifetime of the client. */
   private async ensureRequestDigest(): Promise<string> {
     if (!this.digest) {
@@ -211,6 +309,12 @@ export class SharePointClient {
   private buildItemsUrl(listName: string): string {
     const escaped = listName.replace(/'/g, "''");
     return `${this.siteUrl}/_api/web/lists/getByTitle('${escaped}')/items`;
+  }
+
+  /** Builds the REST endpoint for a folder's children (`Files` or `Folders`). */
+  private buildFolderUrl(folderServerRelativeUrl: string, collection: 'Files' | 'Folders'): string {
+    const escaped = folderServerRelativeUrl.replace(/'/g, "''");
+    return `${this.siteUrl}/_api/web/GetFolderByServerRelativeUrl('${escaped}')/${collection}`;
   }
 
   /** Executes a request with retry (transient failures only) + error mapping. */

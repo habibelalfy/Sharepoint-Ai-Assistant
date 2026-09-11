@@ -8,7 +8,7 @@
  * @module config
  */
 import { config as loadEnv } from 'dotenv';
-import { SERVICE_NAME, SERVICE_VERSION } from './constants';
+import { DEFAULT_EMBEDDING_DIMENSIONS, SERVICE_NAME, SERVICE_VERSION } from './constants';
 import { ConfigError } from './errors';
 
 // Load .env into process.env if it exists; never throw when absent (production
@@ -41,12 +41,41 @@ export interface SmtpConfig {
   from: string;
 }
 
+/** RAG (retrieval-augmented generation) subsystem configuration. */
+export interface RagConfig {
+  /** True when both the pgvector and embedding services are configured. */
+  enabled: boolean;
+  /** Cron expression for the document indexer (`RAG_INDEX_SCHEDULE`). */
+  schedule: string;
+  /** Chunk size in characters (`RAG_CHUNK_SIZE`). */
+  chunkSize: number;
+  /** Chunk overlap in characters (`RAG_CHUNK_OVERLAP`). */
+  chunkOverlap: number;
+  /** Self-hosted embedding server base URL (`EMBEDDING_API_BASE_URL`). */
+  embeddingApiBaseUrl: string;
+  /** API-key placeholder for the embedding server (`EMBEDDING_API_KEY`). */
+  embeddingApiKey: string;
+  /** Embedding model name served by the TEI container (`EMBEDDING_MODEL_NAME`). */
+  embeddingModelName: string;
+  /** Expected embedding vector width (`EMBEDDING_DIMENSIONS`). */
+  embeddingDimensions: number;
+  /** PostgreSQL/pgvector connection string (`PGVECTOR_CONNECTION_STRING`). */
+  pgvectorConnectionString: string;
+}
+
 /** Default cron schedules when env vars are absent (see `.env.example`). */
 const DEFAULT_ALERT_SCHEDULES: AlertScheduleConfig = {
   overdue: '0 9 * * *',
   milestones: '0 10 * * *',
   healthCheck: '0 8 * * 1',
 };
+
+/** Default RAG tunables when env vars are absent (see `.env.example`). */
+const DEFAULT_RAG_SCHEDULE = '0 2 * * *';
+const DEFAULT_RAG_CHUNK_SIZE = 1000;
+const DEFAULT_RAG_CHUNK_OVERLAP = 200;
+const DEFAULT_EMBEDDING_MODEL_NAME = 'bge-large-en-v1.5';
+const DEFAULT_EMBEDDING_API_KEY = 'not-needed';
 
 /** Fully-assembled application configuration. */
 export interface AppConfig {
@@ -59,6 +88,8 @@ export interface AppConfig {
   alertRecipients: string[];
   /** Present when `SMTP_HOST` is configured; otherwise alerts log to console. */
   smtp?: SmtpConfig;
+  /** RAG document-search configuration (additive subsystem, Phase 8). */
+  rag: RagConfig;
 }
 
 /** Returns a trimmed value or throws if the variable is missing/empty. */
@@ -76,6 +107,19 @@ function parseList(value: string | undefined): string[] {
     .split(',')
     .map((entry) => entry.trim())
     .filter((entry) => entry.length > 0);
+}
+
+/** Parses a positive-integer env value, falling back to `fallback` when absent. */
+function parsePositiveInt(env: NodeJS.ProcessEnv, key: string, fallback: number): number {
+  const raw = env[key];
+  if (raw === undefined || raw.trim() === '') {
+    return fallback;
+  }
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new ConfigError(`Invalid ${key}: "${raw}" (expected a positive integer)`);
+  }
+  return parsed;
 }
 
 /**
@@ -124,6 +168,43 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     };
   }
 
+  // RAG is an additive, optional subsystem. It is enabled only when both the
+  // self-hosted embedding server and the pgvector store are configured; setting
+  // exactly one of the two is a misconfiguration.
+  const embeddingApiBaseUrl = (env.EMBEDDING_API_BASE_URL ?? '').trim();
+  const pgvectorConnectionString = (env.PGVECTOR_CONNECTION_STRING ?? '').trim();
+  const hasEmbedding = embeddingApiBaseUrl.length > 0;
+  const hasVectorStore = pgvectorConnectionString.length > 0;
+  if (hasEmbedding !== hasVectorStore) {
+    throw new ConfigError(
+      'RAG requires both EMBEDDING_API_BASE_URL and PGVECTOR_CONNECTION_STRING (set both, or neither to disable document search)',
+    );
+  }
+
+  const chunkSize = parsePositiveInt(env, 'RAG_CHUNK_SIZE', DEFAULT_RAG_CHUNK_SIZE);
+  const chunkOverlap = parsePositiveInt(env, 'RAG_CHUNK_OVERLAP', DEFAULT_RAG_CHUNK_OVERLAP);
+  if (chunkOverlap >= chunkSize) {
+    throw new ConfigError(
+      `Invalid RAG_CHUNK_OVERLAP "${chunkOverlap}": must be less than RAG_CHUNK_SIZE (${chunkSize})`,
+    );
+  }
+
+  const rag: RagConfig = {
+    enabled: hasEmbedding && hasVectorStore,
+    schedule: env.RAG_INDEX_SCHEDULE ?? DEFAULT_RAG_SCHEDULE,
+    chunkSize,
+    chunkOverlap,
+    embeddingApiBaseUrl,
+    embeddingApiKey: env.EMBEDDING_API_KEY ?? DEFAULT_EMBEDDING_API_KEY,
+    embeddingModelName: env.EMBEDDING_MODEL_NAME ?? DEFAULT_EMBEDDING_MODEL_NAME,
+    embeddingDimensions: parsePositiveInt(
+      env,
+      'EMBEDDING_DIMENSIONS',
+      DEFAULT_EMBEDDING_DIMENSIONS,
+    ),
+    pgvectorConnectionString,
+  };
+
   return {
     serviceName: SERVICE_NAME,
     serviceVersion: SERVICE_VERSION,
@@ -142,5 +223,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     },
     alertRecipients,
     smtp,
+    rag,
   };
 }

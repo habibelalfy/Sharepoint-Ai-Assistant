@@ -61,6 +61,12 @@ import {
 } from './tools/security-tools';
 import { AlertService } from './services/alert-service';
 import { ConsoleEmailSender, SmtpEmailSender } from './services/email-service';
+import { DocumentExtractor } from './rag/extraction';
+import { OpenAIEmbeddingProvider, verifyEmbeddingDimension } from './rag/embeddings';
+import { DocumentIndexer } from './rag/indexer';
+import { RetrievalService } from './rag/retrieval-service';
+import { PgVectorStore } from './rag/vector-store';
+import { createSearchDocumentsHandler, searchDocumentsSchema } from './tools/document-tools';
 
 type ToolHandler<Args> = (args: Args) => CallToolResult | Promise<CallToolResult>;
 
@@ -110,6 +116,7 @@ async function auditSafely(audit: AuditService, entry: AIActionEntry): Promise<v
 export interface ServerOptions {
   audit?: AuditService;
   permissions?: PermissionService;
+  retrieval?: RetrievalService;
 }
 
 /**
@@ -257,6 +264,20 @@ export function createServer(
     withAudit(createGetUserPermissionsHandler(permissions, client), audit, 'get_user_permissions'),
   );
 
+  server.registerTool(
+    'search_documents',
+    {
+      description:
+        'Semantic search over SharePoint document libraries (RAG) with citations and permission filtering.',
+      inputSchema: searchDocumentsSchema,
+    },
+    withAudit(
+      createSearchDocumentsHandler(options.retrieval, { audit }),
+      audit,
+      'search_documents',
+    ),
+  );
+
   return server;
 }
 
@@ -269,7 +290,41 @@ export async function main(): Promise<void> {
   const logger = createLogger(config.logLevel, config.serviceName);
 
   const client = await SharePointClient.connect(config.sharepoint);
-  const server = createServer(client, config.serviceName, config.serviceVersion);
+  const permissions = new PermissionService(undefined, client);
+
+  // RAG is additive and optional. When enabled, build the embedding provider +
+  // pgvector store, run the dimension startup check, and schedule the indexer.
+  let retrieval: RetrievalService | undefined;
+  let indexer: DocumentIndexer | undefined;
+  if (config.rag.enabled) {
+    const vectorStore = new PgVectorStore(
+      config.rag.pgvectorConnectionString,
+      config.rag.embeddingDimensions,
+    );
+    await vectorStore.initSchema();
+    const embeddings = new OpenAIEmbeddingProvider({
+      baseUrl: config.rag.embeddingApiBaseUrl,
+      apiKey: config.rag.embeddingApiKey,
+      model: config.rag.embeddingModelName,
+      dimension: config.rag.embeddingDimensions,
+    });
+    await verifyEmbeddingDimension(embeddings, config.rag.embeddingDimensions);
+
+    retrieval = new RetrievalService(embeddings, vectorStore, permissions);
+    indexer = new DocumentIndexer(
+      client,
+      new DocumentExtractor(),
+      { size: config.rag.chunkSize, overlap: config.rag.chunkOverlap },
+      embeddings,
+      vectorStore,
+      { schedule: config.rag.schedule, logger },
+    );
+  }
+
+  const server = createServer(client, config.serviceName, config.serviceVersion, {
+    permissions,
+    retrieval,
+  });
   const transport = new StdioServerTransport();
 
   await server.connect(transport);
@@ -283,6 +338,15 @@ export async function main(): Promise<void> {
     recipients: config.alertRecipients,
   });
   alertService.startAlertScheduler();
+
+  // Start the RAG document indexer job (nightly by default).
+  if (indexer) {
+    indexer.startRagScheduler();
+    logger.info(
+      { event: 'rag_indexer_started', schedule: config.rag.schedule },
+      'RAG document indexer scheduled',
+    );
+  }
 
   const shutdown = (signal: NodeJS.Signals): void => {
     logger.info({ event: 'shutdown_initiated', signal }, 'Shutting down');

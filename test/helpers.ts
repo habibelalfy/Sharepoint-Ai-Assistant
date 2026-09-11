@@ -25,5 +25,9 @@ export function mockSharePointClient(): SharePointClient {
     getRequestDigest: jest.fn(),
     createItem: jest.fn(),
     updateItem: jest.fn(),
+    listDocumentLibraries: jest.fn(),
+    listFilesInFolder: jest.fn(),
+    listSubFolders: jest.fn(),
+    getFileContent: jest.fn(),
   } as unknown as SharePointClient;
 }

@@ -32,6 +32,7 @@ describe('createServer', () => {
       'get_tasks_by_project',
       'get_user_permissions',
       'query_project_data',
+      'search_documents',
       'search_projects',
       'update_escalation',
     ]);

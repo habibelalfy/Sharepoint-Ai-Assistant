@@ -46,6 +46,7 @@ milestones by querying SharePoint through MCP tools.
 - Report project statistics and estimated completion.
 - Create and update escalations.
 - Inspect audit logs and user permissions.
+- Search unstructured documents in document libraries (semantic, with citations).
 
 ## Guidelines
 - Always respect permissions: results are filtered to what the caller's AD

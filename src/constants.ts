@@ -46,3 +46,10 @@ export const ESCALATION_STATUSES = ['Open', 'In Progress', 'Resolved', 'Closed']
 
 /** Status assigned to a newly created escalation. */
 export const DEFAULT_ESCALATION_STATUS = 'Open';
+
+/**
+ * Default pgvector/embedding vector width. BAAI/bge-large-en-v1.5 (the default
+ * embedding model) produces 1024-dimension vectors; the pgvector schema and the
+ * embedding startup check both reference this value (see `src/rag/`).
+ */
+export const DEFAULT_EMBEDDING_DIMENSIONS = 1024;
