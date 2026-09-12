@@ -63,6 +63,22 @@ export interface RagConfig {
   pgvectorConnectionString: string;
 }
 
+/** LLM (chat) orchestration configuration — any OpenAI-compatible endpoint. */
+export interface LlmConfig {
+  /** True when `LLM_API_BASE_URL` is set (enables the chat endpoint). */
+  enabled: boolean;
+  /** OpenAI-compatible base URL (`LLM_API_BASE_URL`). */
+  baseUrl: string;
+  /** API key (`LLM_API_KEY`; placeholder for local models). */
+  apiKey: string;
+  /** Model name (`LLM_MODEL`). */
+  model: string;
+  /** Sampling temperature (`LLM_TEMPERATURE`). */
+  temperature: number;
+  /** Tool-calling loop cap (`LLM_MAX_STEPS`). */
+  maxSteps: number;
+}
+
 /** Default cron schedules when env vars are absent (see `.env.example`). */
 const DEFAULT_ALERT_SCHEDULES: AlertScheduleConfig = {
   overdue: '0 9 * * *',
@@ -77,6 +93,12 @@ const DEFAULT_RAG_CHUNK_OVERLAP = 200;
 const DEFAULT_EMBEDDING_MODEL_NAME = 'bge-large-en-v1.5';
 const DEFAULT_EMBEDDING_API_KEY = 'not-needed';
 
+/** Default LLM chat tunables when env vars are absent (see `.env.example`). */
+const DEFAULT_LLM_API_KEY = 'not-needed';
+const DEFAULT_LLM_MODEL = 'deepseek-chat';
+const DEFAULT_LLM_TEMPERATURE = 0;
+const DEFAULT_LLM_MAX_STEPS = 8;
+
 /** Fully-assembled application configuration. */
 export interface AppConfig {
   serviceName: string;
@@ -90,6 +112,8 @@ export interface AppConfig {
   smtp?: SmtpConfig;
   /** RAG document-search configuration (additive subsystem, Phase 8). */
   rag: RagConfig;
+  /** LLM chat orchestration configuration (OpenAI-compatible endpoint). */
+  llm: LlmConfig;
 }
 
 /** Returns a trimmed value or throws if the variable is missing/empty. */
@@ -118,6 +142,19 @@ function parsePositiveInt(env: NodeJS.ProcessEnv, key: string, fallback: number)
   const parsed = Number(raw);
   if (!Number.isInteger(parsed) || parsed <= 0) {
     throw new ConfigError(`Invalid ${key}: "${raw}" (expected a positive integer)`);
+  }
+  return parsed;
+}
+
+/** Parses a non-negative numeric env value, falling back to `fallback` when absent. */
+function parseNonNegativeNumber(env: NodeJS.ProcessEnv, key: string, fallback: number): number {
+  const raw = env[key];
+  if (raw === undefined || raw.trim() === '') {
+    return fallback;
+  }
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new ConfigError(`Invalid ${key}: "${raw}" (expected a non-negative number)`);
   }
   return parsed;
 }
@@ -205,6 +242,18 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     pgvectorConnectionString,
   };
 
+  // LLM chat (optional): enabled when LLM_API_BASE_URL is set. The URL must be
+  // an OpenAI-compatible endpoint (DeepSeek, Ollama, vLLM, OpenAI, …).
+  const llmBaseUrl = (env.LLM_API_BASE_URL ?? '').trim();
+  const llm: LlmConfig = {
+    enabled: llmBaseUrl.length > 0,
+    baseUrl: llmBaseUrl,
+    apiKey: env.LLM_API_KEY ?? DEFAULT_LLM_API_KEY,
+    model: env.LLM_MODEL ?? DEFAULT_LLM_MODEL,
+    temperature: parseNonNegativeNumber(env, 'LLM_TEMPERATURE', DEFAULT_LLM_TEMPERATURE),
+    maxSteps: parsePositiveInt(env, 'LLM_MAX_STEPS', DEFAULT_LLM_MAX_STEPS),
+  };
+
   return {
     serviceName: SERVICE_NAME,
     serviceVersion: SERVICE_VERSION,
@@ -224,5 +273,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     alertRecipients,
     smtp,
     rag,
+    llm,
   };
 }

@@ -59,13 +59,8 @@ import {
   getAuditLogsSchema,
   getUserPermissionsSchema,
 } from './tools/security-tools';
-import { AlertService } from './services/alert-service';
-import { ConsoleEmailSender, SmtpEmailSender } from './services/email-service';
-import { DocumentExtractor } from './rag/extraction';
-import { OpenAIEmbeddingProvider, verifyEmbeddingDimension } from './rag/embeddings';
-import { DocumentIndexer } from './rag/indexer';
-import { RetrievalService } from './rag/retrieval-service';
-import { PgVectorStore } from './rag/vector-store';
+import { bootstrapBackgroundServices } from './runtime';
+import type { RetrievalService } from './rag/retrieval-service';
 import { createSearchDocumentsHandler, searchDocumentsSchema } from './tools/document-tools';
 
 type ToolHandler<Args> = (args: Args) => CallToolResult | Promise<CallToolResult>;
@@ -290,36 +285,7 @@ export async function main(): Promise<void> {
   const logger = createLogger(config.logLevel, config.serviceName);
 
   const client = await SharePointClient.connect(config.sharepoint);
-  const permissions = new PermissionService(undefined, client);
-
-  // RAG is additive and optional. When enabled, build the embedding provider +
-  // pgvector store, run the dimension startup check, and schedule the indexer.
-  let retrieval: RetrievalService | undefined;
-  let indexer: DocumentIndexer | undefined;
-  if (config.rag.enabled) {
-    const vectorStore = new PgVectorStore(
-      config.rag.pgvectorConnectionString,
-      config.rag.embeddingDimensions,
-    );
-    await vectorStore.initSchema();
-    const embeddings = new OpenAIEmbeddingProvider({
-      baseUrl: config.rag.embeddingApiBaseUrl,
-      apiKey: config.rag.embeddingApiKey,
-      model: config.rag.embeddingModelName,
-      dimension: config.rag.embeddingDimensions,
-    });
-    await verifyEmbeddingDimension(embeddings, config.rag.embeddingDimensions);
-
-    retrieval = new RetrievalService(embeddings, vectorStore, permissions);
-    indexer = new DocumentIndexer(
-      client,
-      new DocumentExtractor(),
-      { size: config.rag.chunkSize, overlap: config.rag.chunkOverlap },
-      embeddings,
-      vectorStore,
-      { schedule: config.rag.schedule, logger },
-    );
-  }
+  const { permissions, retrieval } = await bootstrapBackgroundServices(client, config, logger);
 
   const server = createServer(client, config.serviceName, config.serviceVersion, {
     permissions,
@@ -329,24 +295,6 @@ export async function main(): Promise<void> {
 
   await server.connect(transport);
   logger.info({ event: 'server_started', version: config.serviceVersion }, 'MCP server started');
-
-  // Start the scheduled alert jobs (overdue, upcoming milestones, health check).
-  // Recipients come from ALERT_RECIPIENTS; SMTP is used when SMTP_HOST is set,
-  // otherwise alerts are written to the console (stderr).
-  const emailSender = config.smtp ? new SmtpEmailSender(config.smtp) : new ConsoleEmailSender();
-  const alertService = new AlertService(client, emailSender, config.alertSchedules, {
-    recipients: config.alertRecipients,
-  });
-  alertService.startAlertScheduler();
-
-  // Start the RAG document indexer job (nightly by default).
-  if (indexer) {
-    indexer.startRagScheduler();
-    logger.info(
-      { event: 'rag_indexer_started', schedule: config.rag.schedule },
-      'RAG document indexer scheduled',
-    );
-  }
 
   const shutdown = (signal: NodeJS.Signals): void => {
     logger.info({ event: 'shutdown_initiated', signal }, 'Shutting down');

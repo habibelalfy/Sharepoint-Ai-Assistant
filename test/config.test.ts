@@ -153,3 +153,40 @@ describe('loadConfig RAG', () => {
     ).toThrow(/RAG_CHUNK_OVERLAP/);
   });
 });
+
+describe('loadConfig LLM', () => {
+  it('disables chat by default and applies defaults', () => {
+    const config = loadConfig(validEnv);
+    expect(config.llm.enabled).toBe(false);
+    expect(config.llm.model).toBe('deepseek-chat');
+    expect(config.llm.temperature).toBe(0);
+    expect(config.llm.maxSteps).toBe(8);
+  });
+
+  it('enables chat when LLM_API_BASE_URL is set', () => {
+    const config = loadConfig({ ...validEnv, LLM_API_BASE_URL: 'https://api.deepseek.com/v1' });
+    expect(config.llm.enabled).toBe(true);
+    expect(config.llm.baseUrl).toBe('https://api.deepseek.com/v1');
+    expect(config.llm.apiKey).toBe('not-needed');
+  });
+
+  it('reads custom model/temperature/steps', () => {
+    const config = loadConfig({
+      ...validEnv,
+      LLM_API_BASE_URL: 'http://localhost:11434/v1',
+      LLM_API_KEY: 'ollama',
+      LLM_MODEL: 'qwen2.5',
+      LLM_TEMPERATURE: '0.5',
+      LLM_MAX_STEPS: '12',
+    });
+    expect(config.llm.model).toBe('qwen2.5');
+    expect(config.llm.temperature).toBe(0.5);
+    expect(config.llm.maxSteps).toBe(12);
+  });
+
+  it('rejects a negative temperature', () => {
+    expect(() =>
+      loadConfig({ ...validEnv, LLM_API_BASE_URL: 'http://x', LLM_TEMPERATURE: '-1' }),
+    ).toThrow(/LLM_TEMPERATURE/);
+  });
+});

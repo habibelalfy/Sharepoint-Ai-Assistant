@@ -100,6 +100,11 @@ docker compose -f docker-compose.addendum.yml up -d
 | `EMBEDDING_MODEL_NAME`       | no       | Model served by TEI (default `bge-large-en-v1.5`).                     |
 | `EMBEDDING_DIMENSIONS`       | no       | Vector width (default `1024`).                                         |
 | `PGVECTOR_CONNECTION_STRING` | no*      | PostgreSQL/pgvector connection string (enables RAG).                   |
+| `LLM_API_BASE_URL`           | no       | OpenAI-compatible chat endpoint (enables the chat window).             |
+| `LLM_API_KEY`                | no       | API key (placeholder `not-needed` for local models).                   |
+| `LLM_MODEL`                  | no       | Model name (default `deepseek-chat`).                                  |
+| `LLM_TEMPERATURE`            | no       | Sampling temperature (default `0`).                                    |
+| `LLM_MAX_STEPS`              | no       | Tool-calling loop cap (default `8`).                                   |
 
 \* conditionally required: `SMTP_FROM` when `SMTP_HOST` is set;
 `EMBEDDING_API_BASE_URL` **and** `PGVECTOR_CONNECTION_STRING` together enable RAG
@@ -114,6 +119,30 @@ npm start
 # HTTP gateway (for the SPFx web part)
 npm run start:gateway
 ```
+
+## Run with Docker Desktop
+
+Run the full stack (HTTP gateway + pgvector + embedding server) in containers:
+
+```bash
+# 1. Create the env file and fill in real SharePoint credentials.
+cp .env.example .env
+
+# 2. Build and start the stack.
+docker compose up --build
+```
+
+Notes:
+
+- The gateway authenticates to SharePoint over **NTLM** (forced by
+  `docker-compose.yml`) — Kerberos needs domain membership, which is impractical
+  inside a container. Set `SHAREPOINT_SITE_URL` to a URL the container can reach;
+  if SharePoint runs on this host, use `http://host.docker.internal/...`.
+- The gateway exposes `GET /health`, `POST /api/mcp/tool`, the chat UI at `/`,
+  and `POST /api/chat` on `http://localhost:3001` (the chat endpoint is enabled
+  only when `LLM_API_BASE_URL` is set).
+- On first run, the embedding server downloads `BAAI/bge-large-en-v1.5`
+  (~1.3 GB); the gateway restarts automatically until the model is ready.
 
 ### Connect a desktop client
 
@@ -138,6 +167,36 @@ they reach the model, and every retrieval is audit-logged like any other tool ca
 See [`RAG_ARCHITECTURE.md`](RAG_ARCHITECTURE.md) for the pipeline, schema, and
 deployment topology.
 
+## Chat assistant (LLM)
+
+A built-in chat window (served by the gateway at `/`) lets users ask questions in
+natural language. An LLM drives the assistant's tools (SharePoint structured data
+
+- document search) and composes the answer. It's optional — enable it by setting
+  `LLM_API_BASE_URL` to any OpenAI-compatible endpoint:
+
+```bash
+# Public (DeepSeek)
+LLM_API_BASE_URL=https://api.deepseek.com/v1
+LLM_API_KEY=sk-…
+LLM_MODEL=deepseek-chat
+
+# Local (Ollama on the host; from Docker use http://host.docker.internal:11434/v1)
+LLM_API_BASE_URL=http://localhost:11434/v1
+LLM_API_KEY=ollama
+LLM_MODEL=qwen2.5
+```
+
+Then start the gateway, open `http://localhost:3001`, and paste a bearer token
+generated with:
+
+```bash
+npm run mint-token -- <userId>
+```
+
+The model must support tool/function calling (DeepSeek `deepseek-chat`, or local
+models such as `qwen2.5`, `llama3.1`, or `mistral`).
+
 ## Scripts
 
 | Script                            | Purpose                                                         |
@@ -149,6 +208,7 @@ deployment topology.
 | `npm test`                        | Run the Jest suite.                                             |
 | `npm run test:coverage`           | Run tests with coverage thresholds.                             |
 | `npm run smoke:test`              | End-to-end smoke test (needs a configured `.env` + SharePoint). |
+| `npm run mint-token`              | Mint a bearer token for the chat UI.                            |
 | `npm run generate:prompt`         | Regenerate the system-prompt tool catalog.                      |
 | `npm run lint` / `lint:fix`       | ESLint.                                                         |
 | `npm run format` / `format:check` | Prettier.                                                       |

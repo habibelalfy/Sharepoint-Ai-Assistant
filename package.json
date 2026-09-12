@@ -15,6 +15,7 @@
     "start:gateway": "node dist/api/mcp-http-server.js",
     "generate:prompt": "npm run build && node dist/prompts/generate-system-prompt.js",
     "smoke:test": "npm run build && node scripts/smoke-test.mjs",
+    "mint-token": "node scripts/mint-token.mjs",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write \"**/*.{ts,js,mjs,cjs,json,md}\"",

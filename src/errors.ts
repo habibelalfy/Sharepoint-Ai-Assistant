@@ -91,3 +91,10 @@ export class VectorStoreError extends AppError {
     super(message, options);
   }
 }
+
+/** Thrown when the LLM (chat) provider fails or the agent loop cannot converge. */
+export class LLMProviderError extends AppError {
+  public constructor(message: string, options?: AppErrorOptions) {
+    super(message, options);
+  }
+}

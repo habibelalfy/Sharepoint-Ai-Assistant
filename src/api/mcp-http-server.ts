@@ -13,6 +13,10 @@ import { loadConfig } from '../config';
 import { createLogger } from '../logging';
 import { SharePointAuditService, type AuditService } from '../services/audit-service';
 import { SharePointClient } from '../sharepoint/client';
+import { bootstrapBackgroundServices } from '../runtime';
+import { ChatAgent } from '../llm/agent';
+import { OpenAiCompatibleLLMProvider } from '../llm/provider';
+import { mountChatRoutes } from './chat-routes';
 import { createMcpToolCaller } from './mcp-client';
 import { SlidingWindowRateLimiter } from './rate-limiter';
 
@@ -144,15 +148,31 @@ export async function main(): Promise<void> {
   const logger = createLogger(config.logLevel, config.serviceName);
   const client = await SharePointClient.connect(config.sharepoint);
   const audit = new SharePointAuditService(client);
-  const caller = await createMcpToolCaller(client, { audit });
+
+  // Start the same background services (scheduled alerts + RAG) as the stdio
+  // server, and wire retrieval into the in-process MCP server so the
+  // `search_documents` tool works through the gateway.
+  const { permissions, retrieval } = await bootstrapBackgroundServices(client, config, logger);
+  const caller = await createMcpToolCaller(client, { audit, permissions, retrieval });
 
   const secret = process.env.JWT_SIGNING_KEY ?? 'changeme';
-  const app = createGateway({
-    callTool: caller.callTool,
-    authenticate: createBearerAuthenticator(createHmacTokenVerifier(secret)),
-    rateLimiter: new SlidingWindowRateLimiter(120, 60_000),
-    audit,
-  });
+  const authenticate = createBearerAuthenticator(createHmacTokenVerifier(secret));
+  const rateLimiter = new SlidingWindowRateLimiter(120, 60_000);
+
+  const app = createGateway({ callTool: caller.callTool, authenticate, rateLimiter, audit });
+
+  // Chat endpoint + UI (optional, when an OpenAI-compatible LLM is configured).
+  if (config.llm.enabled) {
+    const provider = new OpenAiCompatibleLLMProvider({
+      baseUrl: config.llm.baseUrl,
+      apiKey: config.llm.apiKey,
+      model: config.llm.model,
+      temperature: config.llm.temperature,
+    });
+    const agent = new ChatAgent(provider, caller, { maxSteps: config.llm.maxSteps });
+    mountChatRoutes(app, { agent, authenticate, rateLimiter });
+    logger.info({ event: 'chat_enabled', model: config.llm.model }, 'LLM chat endpoint enabled');
+  }
 
   const port = Number(process.env.HTTP_GATEWAY_PORT ?? 3001);
   app.listen(port, () => {

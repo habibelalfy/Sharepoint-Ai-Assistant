@@ -32,6 +32,20 @@ access to `Projects`, `Tasks`, `Milestones`, and **contribute** access to
   native package: `npm install kerberos`.
 - **NTLM (fallback)** — `SHAREPOINT_AUTH_MODE=ntlm` (pure JS, no native package).
 
+### Choosing Kerberos vs NTLM
+
+| Aspect            | Kerberos (SPNEGO)                                                       | NTLM                                                                         |
+| ----------------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| Native dependency | Requires `npm install kerberos` (native compile)                        | None — `axios-ntlm`, pure JS                                                 |
+| Process identity  | Must run under a domain account or present an SPN/keytab                | Any account; credentials come from config                                    |
+| Credentials used  | OS/domain ticket (the configured `SHAREPOINT_PASSWORD` is unused)       | `SHAREPOINT_USERNAME` / `SHAREPOINT_PASSWORD` / `SHAREPOINT_DOMAIN`          |
+| Security          | Mutual authentication, ticket-based — strongest option                  | Weaker: no mutual auth; NTLMv2 mitigates pass-the-hash/relay, not eliminates |
+| Choose when       | The farm supports Kerberos and policy prefers SSO/mutual auth (default) | The farm only supports NTLM, or you want to avoid the native dependency      |
+
+Either mode is transparent to the rest of the app — all SharePoint I/O flows
+through the single `SharePointClient` (ADR-001), so switching is a one-line
+`SHAREPOINT_AUTH_MODE` change with no code edits.
+
 ## 3. Permissions (`PermittedGroups`)
 
 Add a **`PermittedGroups`** column (multiple lines of text) to each restricted
