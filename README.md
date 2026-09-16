@@ -75,42 +75,100 @@ docker compose -f docker-compose.addendum.yml up -d
 
 ### Environment variables
 
-| Variable                     | Required | Description                                                            |
-| ---------------------------- | -------- | ---------------------------------------------------------------------- |
-| `SHAREPOINT_SITE_URL`        | yes      | Base URL of the project site (e.g. `http://sp-server/sites/projects`). |
-| `SHAREPOINT_USERNAME`        | yes      | Service account for SharePoint REST calls.                             |
-| `SHAREPOINT_PASSWORD`        | yes      | Service account password (source from a secret store in prod).         |
-| `SHAREPOINT_DOMAIN`          | yes      | AD domain / Kerberos realm.                                            |
-| `SHAREPOINT_AUTH_MODE`       | no       | `kerberos` (default) or `ntlm`.                                        |
-| `LOG_LEVEL`                  | no       | pino level: `fatal`…`trace` (default `info`).                          |
-| `ALERT_SCHEDULE_OVERDUE`     | no       | Cron for the overdue check (default `0 9 * * *`).                      |
-| `ALERT_SCHEDULE_MILESTONES`  | no       | Cron for the upcoming-milestones check (default `0 10 * * *`).         |
-| `ALERT_SCHEDULE_HEALTHCHECK` | no       | Cron for the weekly health check (default `0 8 * * 1`).                |
-| `ALERT_RECIPIENTS`           | no       | Comma-separated email recipients for scheduled alerts.                 |
-| `SMTP_HOST`                  | no       | When set, alerts send via SMTP (requires `npm i nodemailer`).          |
-| `SMTP_PORT`                  | no       | SMTP port (default 25).                                                |
-| `SMTP_FROM`                  | yes*     | From address; required when `SMTP_HOST` is set.                        |
-| `HTTP_GATEWAY_PORT`          | no       | Gateway listen port (default 3001).                                    |
-| `JWT_SIGNING_KEY`            | no       | Secret that signs gateway bearer tokens (use a long random value).     |
-| `RAG_INDEX_SCHEDULE`         | no       | Cron for the document indexer (default `0 2 * * *`).                   |
-| `RAG_CHUNK_SIZE`             | no       | Text chunk size in characters (default `1000`).                        |
-| `RAG_CHUNK_OVERLAP`          | no       | Chunk overlap in characters (default `200`).                           |
-| `EMBEDDING_API_BASE_URL`     | no*      | Self-hosted embedding server URL (enables RAG).                        |
-| `EMBEDDING_API_KEY`          | no       | Placeholder key for the embedding server (default `not-needed`).       |
-| `EMBEDDING_MODEL_NAME`       | no       | Model served by TEI (default `bge-large-en-v1.5`).                     |
-| `EMBEDDING_DIMENSIONS`       | no       | Vector width (default `1024`).                                         |
-| `PGVECTOR_CONNECTION_STRING` | no*      | PostgreSQL/pgvector connection string (enables RAG).                   |
-| `LLM_API_BASE_URL`           | no       | OpenAI-compatible chat endpoint (enables the chat window).             |
-| `LLM_API_KEY`                | no       | API key (placeholder `not-needed` for local models).                   |
-| `LLM_MODEL`                  | no       | Model name (default `deepseek-chat`).                                  |
-| `LLM_TEMPERATURE`            | no       | Sampling temperature (default `0`).                                    |
-| `LLM_MAX_STEPS`              | no       | Tool-calling loop cap (default `8`).                                   |
+| Variable                      | Required | Description                                                            |
+| ----------------------------- | -------- | ---------------------------------------------------------------------- |
+| `SHAREPOINT_SITE_URL`         | yes      | Base URL of the project site (e.g. `http://sp-server/sites/projects`). |
+| `SHAREPOINT_USERNAME`         | yes      | Service account for SharePoint REST calls.                             |
+| `SHAREPOINT_PASSWORD`         | yes      | Service account password (source from a secret store in prod).         |
+| `SHAREPOINT_DOMAIN`           | yes      | AD domain / Kerberos realm.                                            |
+| `SHAREPOINT_AUTH_MODE`        | no       | `kerberos` (default) or `ntlm`.                                        |
+| `PROJECT_PLAN_WRITE_USERS`    | no       | Users allowed to publish generated Project Server plans.               |
+| `PROJECT_PLAN_WRITE_PROJECTS` | no       | Project GUIDs eligible for generated plan publishing.                  |
+| `LOG_LEVEL`                   | no       | pino level: `fatal`…`trace` (default `info`).                          |
+| `ALERT_SCHEDULE_OVERDUE`      | no       | Cron for the overdue check (default `0 9 * * *`).                      |
+| `ALERT_SCHEDULE_MILESTONES`   | no       | Cron for the upcoming-milestones check (default `0 10 * * *`).         |
+| `ALERT_SCHEDULE_HEALTHCHECK`  | no       | Cron for the weekly health check (default `0 8 * * 1`).                |
+| `ALERT_RECIPIENTS`            | no       | Comma-separated email recipients for scheduled alerts.                 |
+| `SMTP_HOST`                   | no       | When set, alerts send via SMTP (requires `npm i nodemailer`).          |
+| `SMTP_PORT`                   | no       | SMTP port (default 25).                                                |
+| `SMTP_FROM`                   | yes*     | From address; required when `SMTP_HOST` is set.                        |
+| `HTTP_GATEWAY_PORT`           | no       | Gateway listen port (default 3001).                                    |
+| `JWT_SIGNING_KEY`             | no       | Secret that signs gateway bearer tokens (use a long random value).     |
+| `RAG_INDEX_SCHEDULE`          | no       | Cron for the document indexer (default `0 2 * * *`).                   |
+| `RAG_CHUNK_SIZE`              | no       | Text chunk size in characters (default `1000`).                        |
+| `RAG_CHUNK_OVERLAP`           | no       | Chunk overlap in characters (default `200`).                           |
+| `EMBEDDING_API_BASE_URL`      | no*      | Self-hosted embedding server URL (enables RAG).                        |
+| `EMBEDDING_API_KEY`           | no       | Placeholder key for the embedding server (default `not-needed`).       |
+| `EMBEDDING_MODEL_NAME`        | no       | Model served by TEI (default `bge-large-en-v1.5`).                     |
+| `EMBEDDING_DIMENSIONS`        | no       | Vector width (default `1024`).                                         |
+| `PGVECTOR_CONNECTION_STRING`  | no*      | PostgreSQL/pgvector connection string (enables RAG).                   |
+| `LLM_API_BASE_URL`            | no       | OpenAI-compatible chat endpoint (enables the chat window).             |
+| `LLM_API_KEY`                 | no       | API key (placeholder `not-needed` for local models).                   |
+| `LLM_MODEL`                   | no       | Model name (default `deepseek-v4-pro`).                                 |
+| `LLM_TEMPERATURE`             | no       | Sampling temperature (default `0`).                                    |
+| `LLM_MAX_STEPS`               | no       | Tool-calling loop cap (default `8`).                                   |
+| `LLM_MAX_TOKENS`              | no       | Max completion tokens per LLM turn (default `8192`).                   |
 
 \* conditionally required: `SMTP_FROM` when `SMTP_HOST` is set;
 `EMBEDDING_API_BASE_URL` **and** `PGVECTOR_CONNECTION_STRING` together enable RAG
 (set both, or neither).
 
 ## Running locally
+
+### Project Server / PWA sites
+
+For existing Project Server projects such as `hexacloud`, set
+`SHAREPOINT_DATA_SOURCE=project-server` in `.env`. This mode reads
+`/_api/ProjectServer/Projects` and published tasks directly. It preserves GUID
+IDs and exposes project search, project details, tasks, milestones, statistics,
+project creation, direct project-site document reading, plan preview/publishing, and caller-scoped
+audit queries. Empty task collections mean no **published** tasks were returned.
+Plan publishing is additive and is denied unless both project-plan allowlists
+match the authenticated user and target project GUID.
+
+Plans can be authored two ways. The document path stages a specification with
+`stage_project_document`, then reads it with `search_project_documents` /
+`read_project_document`, previews with `prepare_project_plan`, and publishes with
+`publish_project_plan`. For Golden Template plans authored from a pasted
+specification, `prepare_project_plan_from_spec` previews a plan directly (no
+source document required) and the same `publish_project_plan` writes it; build
+large plans in phase-by-phase chunks to stay within a single LLM turn.
+
+To create a project, ask the assistant `Create a new project named openstack`.
+The `create_project` tool uses the connected account's Project Server creation
+permissions, validates the name, checks for an exact existing name, and verifies
+the returned GUID. Repeated requests return the existing project rather than
+adding a duplicate. It creates the project record only; tasks and document-site
+provisioning are separate operations. If a write cannot be verified, inspect the
+reported GUID before retrying. Pending-write protection is local to the running
+client; it does not survive restarts or coordinate separate gateway instances.
+
+Use SharePoint's configured web-application hostname in `SHAREPOINT_SITE_URL`
+(for this deployment, `http://bshare/sites/PWA`). An IP URL may be rejected by
+SharePoint's alternate access mappings. Docker resolves this hostname through
+`SHAREPOINT_HOST_NAME` and `SHAREPOINT_HOST_IP` (defaults: `bshare` and
+`192.168.122.44`); update both if the VM address or hostname changes.
+
+Access uses the configured SharePoint service account. Only issue gateway tokens
+to users authorized to use that account's project read and creation permissions; this mode does not
+implement per-user AD permission trimming. Custom-list escalation tools, alerts,
+and the custom-column document indexer are not started in this mode. The original
+integration remains available with `SHAREPOINT_DATA_SOURCE=lists`.
+
+Project Server audit events are written to `/app/data/audit.jsonl` in the Docker
+`assistant_data` volume. This avoids requiring an `AI_AuditLog` SharePoint list.
+
+After configuring the local LLM and starting Docker, create a browser sign-in link:
+
+```bash
+sudo docker compose exec gateway node scripts/mint-token.mjs --url
+```
+
+Open the generated link in your browser. It contains a signed access token, not
+the LLM API key. The page removes the token from the URL and stores it only in
+that tab's session. Treat the generated link as a credential; it expires after
+24 hours. The gateway validates it before enabling chat. To switch to another
+identity, pass its user ID before `--url`.
 
 ```bash
 # MCP server over stdio (for desktop clients)
@@ -179,7 +237,7 @@ natural language. An LLM drives the assistant's tools (SharePoint structured dat
 # Public (DeepSeek)
 LLM_API_BASE_URL=https://api.deepseek.com/v1
 LLM_API_KEY=sk-…
-LLM_MODEL=deepseek-chat
+LLM_MODEL=deepseek-v4-pro
 
 # Local (Ollama on the host; from Docker use http://host.docker.internal:11434/v1)
 LLM_API_BASE_URL=http://localhost:11434/v1
@@ -194,7 +252,7 @@ generated with:
 npm run mint-token -- <userId>
 ```
 
-The model must support tool/function calling (DeepSeek `deepseek-chat`, or local
+The model must support tool/function calling (DeepSeek `deepseek-v4-pro`, or local
 models such as `qwen2.5`, `llama3.1`, or `mistral`).
 
 ## Scripts
@@ -216,6 +274,7 @@ models such as `qwen2.5`, `llama3.1`, or `mistral`).
 ## Documentation
 
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — design, ADRs, repository layout.
+- [`DEPLOYMENT.md`](DEPLOYMENT.md) — how to deploy (Docker, native, production).
 - [`RAG_ARCHITECTURE.md`](RAG_ARCHITECTURE.md) — document-search pipeline & topology.
 - [`USER_GUIDE.md`](USER_GUIDE.md) — for project managers using the assistant.
 - [`ADMIN_GUIDE.md`](ADMIN_GUIDE.md) — for SharePoint administrators.
@@ -226,3 +285,15 @@ models such as `qwen2.5`, `llama3.1`, or `mistral`).
 ## License
 
 MIT — see [`LICENSE`](LICENSE).
+
+### Reporting and predictive delay warnings
+
+Project Server mode now includes **Reports & delay warnings**, a Power BI-ready
+JSON dataset, and assistant tools `get_reporting_dataset` and
+`get_predictive_delay_warnings`. Progress is recorded hourly and on refresh in
+the persistent data volume. Forecasts require real daily history and use an
+explainable progress trend, not a trained probability model.
+
+See [Power BI import queries, dashboard setup, and forecast limitations](docs/power-bi/README.md).
+A Power BI Report Server is optional; without one, the local reporting dashboard
+and downloadable dataset work, but no embedded Power BI report is deployed.

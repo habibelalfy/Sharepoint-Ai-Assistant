@@ -1,0 +1,7 @@
+Project Count = COUNTROWS(Projects)
+Task Count = COUNTROWS(Tasks)
+Milestone Count = CALCULATE(COUNTROWS(Tasks), Tasks[isMilestone] = TRUE())
+Overdue Tasks = CALCULATE(COUNTROWS(Tasks), Tasks[overdue] = TRUE())
+Delay Warnings = CALCULATE(COUNTROWS(Predictions), Predictions[status] IN {"at_risk", "overdue", "stalled"})
+Insufficient History = CALCULATE(COUNTROWS(Predictions), Predictions[status] = "insufficient_history")
+Average Published Progress = AVERAGE(Projects[percentComplete])

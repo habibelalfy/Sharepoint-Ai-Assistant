@@ -1,0 +1,17 @@
+{
+  "passed": true,
+  "project": {
+    "id": "065a1d9e-8c29-45bd-8b54-9b1b590607a8",
+    "title": "openstack",
+    "startDate": "2026-09-15T08:00:00",
+    "endDate": "2026-09-15T08:00:00",
+    "percentComplete": 0,
+    "lastPublishedDate": "2026-09-15T02:02:36.877"
+  },
+  "reply": "The project \"openstack\" was created successfully.\n\n- **Status:** created\n- **GUID:** `065a1d9e-8c29-45bd-8b54-9b1b590607a8`\n- **Title:** openstack\n- **Start/End date:** 2026-09-15 (no tasks yet, so dates are placeholder)\n- **Percent complete:** 0%\n\nNote: this created the project shell only — no tasks or document site were created. Let me know if you'd like to add tasks or plan from a source document.",
+  "checks": [
+    "assistant selected create_project from chat",
+    "successful audited tool execution",
+    "new project verified in SharePoint listing"
+  ]
+}

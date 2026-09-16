@@ -40,6 +40,66 @@ export class ChatAgent {
   public async chat(history: ChatMessage[], userId?: string): Promise<string> {
     const maxSteps = this.options.maxSteps ?? DEFAULT_MAX_STEPS;
     const catalogTools = await this.tools.listTools();
+    const latest = history[history.length - 1];
+    const creationName = latest?.role === 'user' ? projectCreationName(latest.content ?? '') : null;
+    if (creationName && catalogTools.some((tool) => tool.name === 'create_project')) {
+      if (!userId) throw new Error('Authentication is required to create a project.');
+      const result = (await this.tools.callTool('create_project', {
+        name: creationName,
+        userId,
+      })) as {
+        status?: string;
+        project?: { id?: string; title?: string };
+      } | null;
+      if (
+        !result?.project?.id ||
+        !result.project.title ||
+        !['created', 'already_exists'].includes(result.status ?? '')
+      ) {
+        throw new Error('Project creation was not verified. Check Project Server before retrying.');
+      }
+      return result.status === 'created'
+        ? `Created project "${result.project.title}" successfully.\nProject ID: ${result.project.id}`
+        : `Project "${result.project.title}" already exists. No duplicate was created.\nProject ID: ${result.project.id}`;
+    }
+    const documentProject =
+      latest?.role === 'user' ? documentListingProject(latest.content ?? '') : null;
+    if (documentProject && catalogTools.some((tool) => tool.name === 'search_project_documents')) {
+      const result = (await this.tools.callTool('search_project_documents', {
+        projectName: documentProject,
+        query: '',
+        userId,
+      })) as {
+        projectName?: string;
+        documents?: Array<{ name: string; library: string; url: string }>;
+      } | null;
+      if (!result || !Array.isArray(result.documents))
+        throw new Error('Invalid document listing response.');
+      const projectName = result.projectName ?? documentProject;
+      if (result.documents.length === 0)
+        return `No documents were found in the accessible document libraries of ${projectName}.`;
+      return [
+        `${result.documents.length} document(s) in ${projectName}:`,
+        ...result.documents.map(
+          (doc, index) => `${index + 1}. ${doc.name}\n   Library: ${doc.library}\n   ${doc.url}`,
+        ),
+      ].join('\n');
+    }
+    if (
+      latest?.role === 'user' &&
+      isProjectListing(latest.content ?? '') &&
+      catalogTools.some((tool) => tool.name === 'list_projects')
+    ) {
+      const projects = await this.tools.callTool('list_projects', { userId });
+      if (!Array.isArray(projects)) throw new Error('Invalid project listing response.');
+      if (projects.length === 0) {
+        return 'No published projects are accessible to the configured SharePoint account.';
+      }
+      return [
+        `${projects.length} published projects accessible to the configured SharePoint account:`,
+        ...projects.map((project, index) => `${index + 1}. ${project.title} (ID: ${project.id})`),
+      ].join('\n');
+    }
     const toolDefinitions = catalogTools.map(toToolDefinition);
     const systemPrompt = renderSystemPrompt(
       buildToolCatalog(
@@ -91,6 +151,30 @@ export class ChatAgent {
       return JSON.stringify({ error: error instanceof Error ? error.message : String(error) });
     }
   }
+}
+
+function isProjectListing(text: string): boolean {
+  return /^(?:please\s+)?(?:(?:can|could) you\s+)?(?:list|show|display|get)(?:\s+me)?\s+(?:(?:all|the|available|published)\s+)*projects(?:\s+(?:in|on|from)\s+(?:sharepoint|pwa))?[.!?\s]*$/i.test(
+    text.trim(),
+  );
+}
+
+/** Explicit standalone creation only. Complex requests remain on the model path. */
+function projectCreationName(text: string): string | null {
+  const match =
+    /^(?:please\s+)?(?:create|craete)\s+(?:a\s+)?(?:new\s+)?project\s+(?:(?:named|called|name(?:\s+it)?)\s+)?(?:"([^"\r\n]+)"|'([^'\r\n]+)'|([\p{L}\p{N}][\p{L}\p{N}_-]*))[.!?\s]*$/iu.exec(
+      text.trim(),
+    );
+  return (match?.[1] ?? match?.[2] ?? match?.[3])?.trim() || null;
+}
+
+/** Only unfiltered document inventories; summaries and content questions use the model. */
+function documentListingProject(text: string): string | null {
+  const match =
+    /^(?:please\s+)?(?:what\s+(?:documents?|files?)(?:\s+are(?:\s+there)?)?|(?:list|show|display)(?:\s+me)?\s+(?:(?:all|the)\s+)*(?:documents?|files?))\s+(?:on|in|for)\s+(?:project\s+)?([\p{L}\p{N}][\p{L}\p{N} _-]*?)[?.!\s]*$/iu.exec(
+      text.trim(),
+    );
+  return match?.[1]?.trim() || null;
 }
 
 function toToolDefinition(tool: {

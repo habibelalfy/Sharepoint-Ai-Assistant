@@ -19,6 +19,7 @@ RUN npm ci --omit=dev && npm cache clean --force
 
 COPY --from=build /app/dist ./dist
 COPY public ./public
+COPY scripts/mint-token.mjs ./scripts/mint-token.mjs
 
 EXPOSE 3001
 CMD ["node", "dist/api/mcp-http-server.js"]

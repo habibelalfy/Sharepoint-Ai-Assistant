@@ -5,13 +5,13 @@
  */
 import express, { type Express } from 'express';
 import path from 'node:path';
-import { ChatAgent } from '../llm/agent';
+import type { ChatAgent } from '../llm/agent';
 import type { ChatMessage } from '../llm/provider';
 import type { Authenticator } from './mcp-http-server';
 import type { SlidingWindowRateLimiter } from './rate-limiter';
 
 export interface ChatRouteOptions {
-  agent: ChatAgent;
+  agent: Pick<ChatAgent, 'chat'>;
   authenticate: Authenticator;
   rateLimiter: SlidingWindowRateLimiter;
 }

@@ -1,0 +1,25 @@
+{
+  "passed": true,
+  "documentCount": 1,
+  "documents": [
+    "dc Project Management Plan Template (V1.0) (1).pdf"
+  ],
+  "model": "deepseek-v4-pro",
+  "projectCount": 4,
+  "projects": [
+    "cloud1",
+    "cloud2",
+    "K8S",
+    "project10"
+  ],
+  "chatMs": 4941,
+  "checks": [
+    "browser setup",
+    "live AI answered synthetic arithmetic question",
+    "cloud1 document chat matches live SharePoint results",
+    "credential fields cleared",
+    "chat matches live MCP results",
+    "unauthenticated chat rejected",
+    "change connection clears conversation"
+  ]
+}

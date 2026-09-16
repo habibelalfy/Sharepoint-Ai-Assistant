@@ -1,0 +1,12 @@
+{
+  "passed": true,
+  "synthetic": true,
+  "checks": [
+    "report rendering",
+    "warning display",
+    "Power BI dataset download",
+    "missing Report Server state",
+    "failed refresh clears stale dataset",
+    "change connection hides reports"
+  ]
+}

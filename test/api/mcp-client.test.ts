@@ -4,6 +4,18 @@ import { NoopAuditService } from '../../src/services/audit-service';
 import { mockSharePointClient } from '../helpers';
 
 describe('createMcpToolCaller', () => {
+  it('rejects MCP error results instead of treating their text as successful data', async () => {
+    const client = mockSharePointClient();
+    jest.mocked(client.queryList).mockRejectedValue(new Error('Backend unavailable'));
+    const caller = await createMcpToolCaller(client, { audit: new NoopAuditService() });
+    try {
+      await expect(caller.callTool('search_projects', { query: 'x' })).rejects.toThrow(
+        'Backend unavailable',
+      );
+    } finally {
+      await caller.close();
+    }
+  });
   it('lists the registered tools', async () => {
     const caller = await createMcpToolCaller(mockSharePointClient(), {
       audit: new NoopAuditService(),

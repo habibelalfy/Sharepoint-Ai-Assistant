@@ -21,10 +21,52 @@ type CreateChat = (body: unknown) => Promise<{
 }>;
 
 describe('OpenAiCompatibleLLMProvider', () => {
+  it('uses DeepSeek non-thinking mode for tool-capable chat', async () => {
+    const create = jest
+      .fn<CreateChat>()
+      .mockResolvedValue({ choices: [{ message: { content: 'ok' } }] });
+    (OpenAI as unknown as jest.Mock).mockImplementation(() => ({
+      chat: { completions: { create } },
+    }));
+    const provider = new OpenAiCompatibleLLMProvider({
+      baseUrl: 'https://api.deepseek.com',
+      apiKey: 'test',
+      model: 'deepseek-flash',
+    });
+    await provider.complete([{ role: 'user', content: 'hello' }]);
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: 'deepseek-flash',
+        thinking: { type: 'disabled' },
+        reasoning_effort: 'low',
+        max_tokens: 4096,
+        stream: false,
+      }),
+    );
+  });
+  it('reports connection failures without exposing SDK credentials', async () => {
+    const error = new Error('sensitive backend details');
+    error.name = 'APIConnectionTimeoutError';
+    const create = jest.fn<CreateChat>().mockRejectedValue(error);
+    (OpenAI as unknown as jest.Mock).mockImplementation(() => ({
+      chat: { completions: { create } },
+    }));
+    const provider = new OpenAiCompatibleLLMProvider({
+      baseUrl: 'http://local/v1',
+      apiKey: 'not-needed',
+      model: 'local',
+    });
+    await expect(provider.complete([{ role: 'user', content: 'hello' }])).rejects.toThrow(
+      /Check that the model server is running/,
+    );
+    await expect(provider.complete([{ role: 'user', content: 'hello' }])).rejects.not.toThrow(
+      /sensitive backend details/,
+    );
+  });
   const options = {
     baseUrl: 'https://api.deepseek.com/v1',
     apiKey: 'sk-test',
-    model: 'deepseek-chat',
+    model: 'deepseek-flash',
   };
 
   it('returns content and tool calls', async () => {
@@ -84,6 +126,23 @@ describe('OpenAiCompatibleLLMProvider', () => {
     const provider = new OpenAiCompatibleLLMProvider(options);
     await expect(provider.complete([{ role: 'user', content: 'hi' }])).rejects.toBeInstanceOf(
       LLMProviderError,
+    );
+  });
+
+  it('includes sanitized provider status without exposing API keys', async () => {
+    const error = Object.assign(new Error('Incorrect API key provided: sk-secret123'), {
+      status: 401,
+      code: 'invalid_api_key',
+      type: 'authentication_error',
+    });
+    const create = jest.fn<CreateChat>().mockRejectedValue(error);
+    (OpenAI as unknown as jest.Mock).mockImplementation(() => ({
+      chat: { completions: { create } },
+    }));
+
+    const provider = new OpenAiCompatibleLLMProvider(options);
+    await expect(provider.complete([{ role: 'user', content: 'hi' }])).rejects.toThrow(
+      /status 401; code invalid_api_key; type authentication_error; Incorrect API key provided: sk-redacted/,
     );
   });
 });

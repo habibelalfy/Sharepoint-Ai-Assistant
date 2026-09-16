@@ -4,11 +4,16 @@ coverage
 .git
 .env
 .env.*
+key.txt
+data
 *.log
 spfx
 docs
 test
 scripts
+!scripts/
+scripts/*
+!scripts/mint-token.mjs
 sql
 .vscode
 .idea

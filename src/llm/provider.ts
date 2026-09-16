@@ -64,6 +64,8 @@ export interface OpenAiCompatibleLLMProviderOptions {
   apiKey: string;
   model: string;
   temperature?: number;
+  /** Maximum completion tokens per turn (default 4096). */
+  maxTokens?: number;
 }
 
 type ChatCreateParams = Parameters<OpenAI['chat']['completions']['create']>[0];
@@ -73,11 +75,20 @@ export class OpenAiCompatibleLLMProvider implements ILLMProvider {
   private readonly client: OpenAI;
   private readonly model: string;
   private readonly temperature: number;
+  private readonly maxTokens: number;
+  private readonly isDeepSeek: boolean;
 
   public constructor(options: OpenAiCompatibleLLMProviderOptions) {
-    this.client = new OpenAI({ baseURL: options.baseUrl, apiKey: options.apiKey });
+    this.isDeepSeek = new URL(options.baseUrl).hostname === 'api.deepseek.com';
+    this.client = new OpenAI({
+      baseURL: options.baseUrl,
+      apiKey: options.apiKey,
+      timeout: 120_000,
+      maxRetries: 0,
+    });
     this.model = options.model;
     this.temperature = options.temperature ?? 0;
+    this.maxTokens = options.maxTokens ?? 4096;
   }
 
   public async complete(
@@ -90,6 +101,11 @@ export class OpenAiCompatibleLLMProvider implements ILLMProvider {
         messages,
         tools: tools && tools.length > 0 ? tools : undefined,
         temperature: this.temperature,
+        stream: false,
+        max_tokens: this.maxTokens,
+        ...(this.isDeepSeek
+          ? { thinking: { type: 'disabled' }, reasoning_effort: 'low' }
+          : {}),
       } as unknown as ChatCreateParams;
 
       const response = (await this.client.chat.completions.create(
@@ -106,7 +122,42 @@ export class OpenAiCompatibleLLMProvider implements ILLMProvider {
         })),
       };
     } catch (cause) {
-      throw new LLMProviderError('LLM completion request failed', { cause });
+      if (cause instanceof Error && /Connection|Timeout/.test(cause.name)) {
+      throw new LLMProviderError(
+        'Cannot reach the LLM server or the request timed out. Check that the model server is running and reachable from Docker, then retry.',
+        { cause },
+      );
+      }
+      throw new LLMProviderError(`LLM completion request failed${providerErrorHint(cause)}`, {
+        cause,
+      });
     }
   }
+}
+
+function providerErrorHint(cause: unknown): string {
+  if (typeof cause !== 'object' || cause === null) {
+    return '';
+  }
+
+  const row = cause as Record<string, unknown>;
+  const status = typeof row.status === 'number' ? row.status : undefined;
+  const code = typeof row.code === 'string' ? row.code : undefined;
+  const type = typeof row.type === 'string' ? row.type : undefined;
+  const message = typeof row.message === 'string' ? redactSensitiveText(row.message) : undefined;
+  const parts = [
+    status ? `status ${status}` : undefined,
+    code ? `code ${code}` : undefined,
+    type ? `type ${type}` : undefined,
+    message,
+  ].filter(Boolean);
+
+  return parts.length > 0 ? `: ${parts.join('; ')}` : '';
+}
+
+function redactSensitiveText(value: string): string {
+  return value
+    .replace(/sk-[A-Za-z0-9_-]+/g, 'sk-redacted')
+    .replace(/Bearer\s+[A-Za-z0-9._-]+/gi, 'Bearer redacted')
+    .slice(0, 500);
 }

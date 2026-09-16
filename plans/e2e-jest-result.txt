@@ -1,0 +1,638 @@
+FAIL test/api/mcp-http-server.test.ts (51.133 s)
+  ● createGateway › still returns JSON 401 when security auditing fails
+
+    listen EPERM: operation not permitted 0.0.0.0
+
+      18 |   return new Promise((resolve) => {
+      19 |     const server = createServer(app);
+    > 20 |     server.listen(0, () => {
+         |            ^
+      21 |       const { port } = server.address() as AddressInfo;
+      22 |       resolve({
+      23 |         url: `http://127.0.0.1:${port}`,
+
+      at test/api/mcp-http-server.test.ts:20:12
+      at start (test/api/mcp-http-server.test.ts:18:10)
+      at Object.<anonymous> (test/api/mcp-http-server.test.ts:47:26)
+
+  ● createGateway › still returns JSON 401 when security auditing fails
+
+    thrown: "Exceeded timeout of 5000 ms for a test.
+    Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout."
+
+      at _getError (node_modules/jest-circus/build/jestAdapterInit.js:1985:12)
+          at Array.map (<anonymous>)
+
+    Cause:
+        thrown: "Exceeded timeout of 5000 ms for a test.
+        Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout."
+
+          42 |
+          43 | describe('createGateway', () => {
+        > 44 |   it('still returns JSON 401 when security auditing fails', async () => {
+             |     ^
+          45 |     const audit = new NoopAuditService();
+          46 |     jest.spyOn(audit, 'logSecurityEvent').mockRejectedValue(new Error('Audit storage unavailable'));
+          47 |     const server = await start(makeApp(async () => undefined, 10, audit));
+
+          at test/api/mcp-http-server.test.ts:44:5
+          at Object.<anonymous> (test/api/mcp-http-server.test.ts:43:9)
+
+  ● createGateway › validates browser sessions without granting anonymous access
+
+    listen EPERM: operation not permitted 0.0.0.0
+
+      18 |   return new Promise((resolve) => {
+      19 |     const server = createServer(app);
+    > 20 |     server.listen(0, () => {
+         |            ^
+      21 |       const { port } = server.address() as AddressInfo;
+      22 |       resolve({
+      23 |         url: `http://127.0.0.1:${port}`,
+
+      at test/api/mcp-http-server.test.ts:20:12
+      at start (test/api/mcp-http-server.test.ts:18:10)
+      at Object.<anonymous> (test/api/mcp-http-server.test.ts:61:26)
+
+  ● createGateway › validates browser sessions without granting anonymous access
+
+    thrown: "Exceeded timeout of 5000 ms for a test.
+    Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout."
+
+      at _getError (node_modules/jest-circus/build/jestAdapterInit.js:1985:12)
+          at Array.map (<anonymous>)
+
+    Cause:
+        thrown: "Exceeded timeout of 5000 ms for a test.
+        Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout."
+
+          58 |     }
+          59 |   });
+        > 60 |   it('validates browser sessions without granting anonymous access', async () => {
+             |     ^
+          61 |     const server = await start(makeApp(async () => undefined, 10));
+          62 |     try {
+          63 |       expect((await fetch(`${server.url}/api/session`)).status).toBe(401);
+
+          at test/api/mcp-http-server.test.ts:60:5
+          at Object.<anonymous> (test/api/mcp-http-server.test.ts:43:9)
+
+  ● createGateway › forwards an authenticated tool call and injects userId
+
+    listen EPERM: operation not permitted 0.0.0.0
+
+      18 |   return new Promise((resolve) => {
+      19 |     const server = createServer(app);
+    > 20 |     server.listen(0, () => {
+         |            ^
+      21 |       const { port } = server.address() as AddressInfo;
+      22 |       resolve({
+      23 |         url: `http://127.0.0.1:${port}`,
+
+      at test/api/mcp-http-server.test.ts:20:12
+      at start (test/api/mcp-http-server.test.ts:18:10)
+      at Object.<anonymous> (test/api/mcp-http-server.test.ts:80:26)
+
+  ● createGateway › forwards an authenticated tool call and injects userId
+
+    thrown: "Exceeded timeout of 5000 ms for a test.
+    Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout."
+
+      at _getError (node_modules/jest-circus/build/jestAdapterInit.js:1985:12)
+          at Array.map (<anonymous>)
+
+    Cause:
+        thrown: "Exceeded timeout of 5000 ms for a test.
+        Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout."
+
+          73 |     }
+          74 |   });
+        > 75 |   it('forwards an authenticated tool call and injects userId', async () => {
+             |     ^
+          76 |     const callTool = jest
+          77 |       .fn<(n: string, a: Record<string, unknown>) => Promise<unknown>>()
+          78 |       .mockResolvedValue({ id: 1 });
+
+          at test/api/mcp-http-server.test.ts:75:5
+          at Object.<anonymous> (test/api/mcp-http-server.test.ts:43:9)
+
+  ● createGateway › rejects a request without a valid token and logs a security event
+
+    listen EPERM: operation not permitted 0.0.0.0
+
+      18 |   return new Promise((resolve) => {
+      19 |     const server = createServer(app);
+    > 20 |     server.listen(0, () => {
+         |            ^
+      21 |       const { port } = server.address() as AddressInfo;
+      22 |       resolve({
+      23 |         url: `http://127.0.0.1:${port}`,
+
+      at test/api/mcp-http-server.test.ts:20:12
+      at start (test/api/mcp-http-server.test.ts:18:10)
+      at Object.<anonymous> (test/api/mcp-http-server.test.ts:103:26)
+
+  ● createGateway › rejects a request without a valid token and logs a security event
+
+    thrown: "Exceeded timeout of 5000 ms for a test.
+    Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout."
+
+      at _getError (node_modules/jest-circus/build/jestAdapterInit.js:1985:12)
+          at Array.map (<anonymous>)
+
+    Cause:
+        thrown: "Exceeded timeout of 5000 ms for a test.
+        Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout."
+
+           96 |   });
+           97 |
+        >  98 |   it('rejects a request without a valid token and logs a security event', async () => {
+              |     ^
+           99 |     const callTool = jest.fn<(n: string, a: Record<string, unknown>) => Promise<unknown>>();
+          100 |     const audit = new NoopAuditService();
+          101 |     const spy = jest.spyOn(audit, 'logSecurityEvent');
+
+          at test/api/mcp-http-server.test.ts:98:5
+          at Object.<anonymous> (test/api/mcp-http-server.test.ts:43:9)
+
+  ● createGateway › rate-limits requests per user
+
+    listen EPERM: operation not permitted 0.0.0.0
+
+      18 |   return new Promise((resolve) => {
+      19 |     const server = createServer(app);
+    > 20 |     server.listen(0, () => {
+         |            ^
+      21 |       const { port } = server.address() as AddressInfo;
+      22 |       resolve({
+      23 |         url: `http://127.0.0.1:${port}`,
+
+      at test/api/mcp-http-server.test.ts:20:12
+      at start (test/api/mcp-http-server.test.ts:18:10)
+      at Object.<anonymous> (test/api/mcp-http-server.test.ts:122:26)
+
+  ● createGateway › rate-limits requests per user
+
+    thrown: "Exceeded timeout of 5000 ms for a test.
+    Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout."
+
+      at _getError (node_modules/jest-circus/build/jestAdapterInit.js:1985:12)
+          at Array.map (<anonymous>)
+
+    Cause:
+        thrown: "Exceeded timeout of 5000 ms for a test.
+        Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout."
+
+          115 |   });
+          116 |
+        > 117 |   it('rate-limits requests per user', async () => {
+              |     ^
+          118 |     const callTool = jest
+          119 |       .fn<(n: string, a: Record<string, unknown>) => Promise<unknown>>()
+          120 |       .mockResolvedValue('ok');
+
+          at test/api/mcp-http-server.test.ts:117:5
+          at Object.<anonymous> (test/api/mcp-http-server.test.ts:43:9)
+
+  ● createGateway › rejects non-object args with 400
+
+    listen EPERM: operation not permitted 0.0.0.0
+
+      18 |   return new Promise((resolve) => {
+      19 |     const server = createServer(app);
+    > 20 |     server.listen(0, () => {
+         |            ^
+      21 |       const { port } = server.address() as AddressInfo;
+      22 |       resolve({
+      23 |         url: `http://127.0.0.1:${port}`,
+
+      at test/api/mcp-http-server.test.ts:20:12
+      at start (test/api/mcp-http-server.test.ts:18:10)
+      at Object.<anonymous> (test/api/mcp-http-server.test.ts:139:26)
+
+  ● createGateway › rejects non-object args with 400
+
+    thrown: "Exceeded timeout of 5000 ms for a test.
+    Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout."
+
+      at _getError (node_modules/jest-circus/build/jestAdapterInit.js:1985:12)
+          at Array.map (<anonymous>)
+
+    Cause:
+        thrown: "Exceeded timeout of 5000 ms for a test.
+        Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout."
+
+          134 |   });
+          135 |
+        > 136 |   it('rejects non-object args with 400', async () => {
+              |     ^
+          137 |     const callTool = jest.fn<(n: string, a: Record<string, unknown>) => Promise<unknown>>();
+          138 |     const app = makeApp(callTool, 10);
+          139 |     const server = await start(app);
+
+          at test/api/mcp-http-server.test.ts:136:5
+          at Object.<anonymous> (test/api/mcp-http-server.test.ts:43:9)
+
+  ● createGateway › returns 500 when the tool handler throws
+
+    listen EPERM: operation not permitted 0.0.0.0
+
+      18 |   return new Promise((resolve) => {
+      19 |     const server = createServer(app);
+    > 20 |     server.listen(0, () => {
+         |            ^
+      21 |       const { port } = server.address() as AddressInfo;
+      22 |       resolve({
+      23 |         url: `http://127.0.0.1:${port}`,
+
+      at test/api/mcp-http-server.test.ts:20:12
+      at start (test/api/mcp-http-server.test.ts:18:10)
+      at Object.<anonymous> (test/api/mcp-http-server.test.ts:158:26)
+
+  ● createGateway › returns 500 when the tool handler throws
+
+    thrown: "Exceeded timeout of 5000 ms for a test.
+    Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout."
+
+      at _getError (node_modules/jest-circus/build/jestAdapterInit.js:1985:12)
+          at Array.map (<anonymous>)
+
+    Cause:
+        thrown: "Exceeded timeout of 5000 ms for a test.
+        Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout."
+
+          151 |   });
+          152 |
+        > 153 |   it('returns 500 when the tool handler throws', async () => {
+              |     ^
+          154 |     const callTool = jest
+          155 |       .fn<(n: string, a: Record<string, unknown>) => Promise<unknown>>()
+          156 |       .mockRejectedValue(new Error('boom'));
+
+          at test/api/mcp-http-server.test.ts:153:5
+          at Object.<anonymous> (test/api/mcp-http-server.test.ts:43:9)
+
+  ● createGateway › exposes an unauthenticated health-check endpoint
+
+    listen EPERM: operation not permitted 0.0.0.0
+
+      18 |   return new Promise((resolve) => {
+      19 |     const server = createServer(app);
+    > 20 |     server.listen(0, () => {
+         |            ^
+      21 |       const { port } = server.address() as AddressInfo;
+      22 |       resolve({
+      23 |         url: `http://127.0.0.1:${port}`,
+
+      at test/api/mcp-http-server.test.ts:20:12
+      at start (test/api/mcp-http-server.test.ts:18:10)
+      at Object.<anonymous> (test/api/mcp-http-server.test.ts:174:26)
+
+  ● createGateway › exposes an unauthenticated health-check endpoint
+
+    thrown: "Exceeded timeout of 5000 ms for a test.
+    Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout."
+
+      at _getError (node_modules/jest-circus/build/jestAdapterInit.js:1985:12)
+          at Array.map (<anonymous>)
+
+    Cause:
+        thrown: "Exceeded timeout of 5000 ms for a test.
+        Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout."
+
+          170 |   });
+          171 |
+        > 172 |   it('exposes an unauthenticated health-check endpoint', async () => {
+              |     ^
+          173 |     const app = makeApp(jest.fn<(n: string, a: Record<string, unknown>) => Promise<unknown>>(), 10);
+          174 |     const server = await start(app);
+          175 |
+
+          at test/api/mcp-http-server.test.ts:172:5
+          at Object.<anonymous> (test/api/mcp-http-server.test.ts:43:9)
+
+[email] to=pm@corp.com subject="Overdue items require attention"
+[email] to=pm@corp.com subject="Upcoming milestones"
+[email] to=pm@corp.com subject="Project health check"
+[email] to=a@corp.com, b@corp.com subject="Subject"
+
+Summary of all failing tests
+FAIL test/api/mcp-http-server.test.ts (51.133 s)
+  ● createGateway › still returns JSON 401 when security auditing fails
+
+    listen EPERM: operation not permitted 0.0.0.0
+
+      18 |   return new Promise((resolve) => {
+      19 |     const server = createServer(app);
+    > 20 |     server.listen(0, () => {
+         |            ^
+      21 |       const { port } = server.address() as AddressInfo;
+      22 |       resolve({
+      23 |         url: `http://127.0.0.1:${port}`,
+
+      at test/api/mcp-http-server.test.ts:20:12
+      at start (test/api/mcp-http-server.test.ts:18:10)
+      at Object.<anonymous> (test/api/mcp-http-server.test.ts:47:26)
+
+  ● createGateway › still returns JSON 401 when security auditing fails
+
+    thrown: "Exceeded timeout of 5000 ms for a test.
+    Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout."
+
+      at _getError (node_modules/jest-circus/build/jestAdapterInit.js:1985:12)
+          at Array.map (<anonymous>)
+
+    Cause:
+        thrown: "Exceeded timeout of 5000 ms for a test.
+        Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout."
+
+          42 |
+          43 | describe('createGateway', () => {
+        > 44 |   it('still returns JSON 401 when security auditing fails', async () => {
+             |     ^
+          45 |     const audit = new NoopAuditService();
+          46 |     jest.spyOn(audit, 'logSecurityEvent').mockRejectedValue(new Error('Audit storage unavailable'));
+          47 |     const server = await start(makeApp(async () => undefined, 10, audit));
+
+          at test/api/mcp-http-server.test.ts:44:5
+          at Object.<anonymous> (test/api/mcp-http-server.test.ts:43:9)
+
+  ● createGateway › validates browser sessions without granting anonymous access
+
+    listen EPERM: operation not permitted 0.0.0.0
+
+      18 |   return new Promise((resolve) => {
+      19 |     const server = createServer(app);
+    > 20 |     server.listen(0, () => {
+         |            ^
+      21 |       const { port } = server.address() as AddressInfo;
+      22 |       resolve({
+      23 |         url: `http://127.0.0.1:${port}`,
+
+      at test/api/mcp-http-server.test.ts:20:12
+      at start (test/api/mcp-http-server.test.ts:18:10)
+      at Object.<anonymous> (test/api/mcp-http-server.test.ts:61:26)
+
+  ● createGateway › validates browser sessions without granting anonymous access
+
+    thrown: "Exceeded timeout of 5000 ms for a test.
+    Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout."
+
+      at _getError (node_modules/jest-circus/build/jestAdapterInit.js:1985:12)
+          at Array.map (<anonymous>)
+
+    Cause:
+        thrown: "Exceeded timeout of 5000 ms for a test.
+        Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout."
+
+          58 |     }
+          59 |   });
+        > 60 |   it('validates browser sessions without granting anonymous access', async () => {
+             |     ^
+          61 |     const server = await start(makeApp(async () => undefined, 10));
+          62 |     try {
+          63 |       expect((await fetch(`${server.url}/api/session`)).status).toBe(401);
+
+          at test/api/mcp-http-server.test.ts:60:5
+          at Object.<anonymous> (test/api/mcp-http-server.test.ts:43:9)
+
+  ● createGateway › forwards an authenticated tool call and injects userId
+
+    listen EPERM: operation not permitted 0.0.0.0
+
+      18 |   return new Promise((resolve) => {
+      19 |     const server = createServer(app);
+    > 20 |     server.listen(0, () => {
+         |            ^
+      21 |       const { port } = server.address() as AddressInfo;
+      22 |       resolve({
+      23 |         url: `http://127.0.0.1:${port}`,
+
+      at test/api/mcp-http-server.test.ts:20:12
+      at start (test/api/mcp-http-server.test.ts:18:10)
+      at Object.<anonymous> (test/api/mcp-http-server.test.ts:80:26)
+
+  ● createGateway › forwards an authenticated tool call and injects userId
+
+    thrown: "Exceeded timeout of 5000 ms for a test.
+    Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout."
+
+      at _getError (node_modules/jest-circus/build/jestAdapterInit.js:1985:12)
+          at Array.map (<anonymous>)
+
+    Cause:
+        thrown: "Exceeded timeout of 5000 ms for a test.
+        Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout."
+
+          73 |     }
+          74 |   });
+        > 75 |   it('forwards an authenticated tool call and injects userId', async () => {
+             |     ^
+          76 |     const callTool = jest
+          77 |       .fn<(n: string, a: Record<string, unknown>) => Promise<unknown>>()
+          78 |       .mockResolvedValue({ id: 1 });
+
+          at test/api/mcp-http-server.test.ts:75:5
+          at Object.<anonymous> (test/api/mcp-http-server.test.ts:43:9)
+
+  ● createGateway › rejects a request without a valid token and logs a security event
+
+    listen EPERM: operation not permitted 0.0.0.0
+
+      18 |   return new Promise((resolve) => {
+      19 |     const server = createServer(app);
+    > 20 |     server.listen(0, () => {
+         |            ^
+      21 |       const { port } = server.address() as AddressInfo;
+      22 |       resolve({
+      23 |         url: `http://127.0.0.1:${port}`,
+
+      at test/api/mcp-http-server.test.ts:20:12
+      at start (test/api/mcp-http-server.test.ts:18:10)
+      at Object.<anonymous> (test/api/mcp-http-server.test.ts:103:26)
+
+  ● createGateway › rejects a request without a valid token and logs a security event
+
+    thrown: "Exceeded timeout of 5000 ms for a test.
+    Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout."
+
+      at _getError (node_modules/jest-circus/build/jestAdapterInit.js:1985:12)
+          at Array.map (<anonymous>)
+
+    Cause:
+        thrown: "Exceeded timeout of 5000 ms for a test.
+        Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout."
+
+           96 |   });
+           97 |
+        >  98 |   it('rejects a request without a valid token and logs a security event', async () => {
+              |     ^
+           99 |     const callTool = jest.fn<(n: string, a: Record<string, unknown>) => Promise<unknown>>();
+          100 |     const audit = new NoopAuditService();
+          101 |     const spy = jest.spyOn(audit, 'logSecurityEvent');
+
+          at test/api/mcp-http-server.test.ts:98:5
+          at Object.<anonymous> (test/api/mcp-http-server.test.ts:43:9)
+
+  ● createGateway › rate-limits requests per user
+
+    listen EPERM: operation not permitted 0.0.0.0
+
+      18 |   return new Promise((resolve) => {
+      19 |     const server = createServer(app);
+    > 20 |     server.listen(0, () => {
+         |            ^
+      21 |       const { port } = server.address() as AddressInfo;
+      22 |       resolve({
+      23 |         url: `http://127.0.0.1:${port}`,
+
+      at test/api/mcp-http-server.test.ts:20:12
+      at start (test/api/mcp-http-server.test.ts:18:10)
+      at Object.<anonymous> (test/api/mcp-http-server.test.ts:122:26)
+
+  ● createGateway › rate-limits requests per user
+
+    thrown: "Exceeded timeout of 5000 ms for a test.
+    Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout."
+
+      at _getError (node_modules/jest-circus/build/jestAdapterInit.js:1985:12)
+          at Array.map (<anonymous>)
+
+    Cause:
+        thrown: "Exceeded timeout of 5000 ms for a test.
+        Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout."
+
+          115 |   });
+          116 |
+        > 117 |   it('rate-limits requests per user', async () => {
+              |     ^
+          118 |     const callTool = jest
+          119 |       .fn<(n: string, a: Record<string, unknown>) => Promise<unknown>>()
+          120 |       .mockResolvedValue('ok');
+
+          at test/api/mcp-http-server.test.ts:117:5
+          at Object.<anonymous> (test/api/mcp-http-server.test.ts:43:9)
+
+  ● createGateway › rejects non-object args with 400
+
+    listen EPERM: operation not permitted 0.0.0.0
+
+      18 |   return new Promise((resolve) => {
+      19 |     const server = createServer(app);
+    > 20 |     server.listen(0, () => {
+         |            ^
+      21 |       const { port } = server.address() as AddressInfo;
+      22 |       resolve({
+      23 |         url: `http://127.0.0.1:${port}`,
+
+      at test/api/mcp-http-server.test.ts:20:12
+      at start (test/api/mcp-http-server.test.ts:18:10)
+      at Object.<anonymous> (test/api/mcp-http-server.test.ts:139:26)
+
+  ● createGateway › rejects non-object args with 400
+
+    thrown: "Exceeded timeout of 5000 ms for a test.
+    Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout."
+
+      at _getError (node_modules/jest-circus/build/jestAdapterInit.js:1985:12)
+          at Array.map (<anonymous>)
+
+    Cause:
+        thrown: "Exceeded timeout of 5000 ms for a test.
+        Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout."
+
+          134 |   });
+          135 |
+        > 136 |   it('rejects non-object args with 400', async () => {
+              |     ^
+          137 |     const callTool = jest.fn<(n: string, a: Record<string, unknown>) => Promise<unknown>>();
+          138 |     const app = makeApp(callTool, 10);
+          139 |     const server = await start(app);
+
+          at test/api/mcp-http-server.test.ts:136:5
+          at Object.<anonymous> (test/api/mcp-http-server.test.ts:43:9)
+
+  ● createGateway › returns 500 when the tool handler throws
+
+    listen EPERM: operation not permitted 0.0.0.0
+
+      18 |   return new Promise((resolve) => {
+      19 |     const server = createServer(app);
+    > 20 |     server.listen(0, () => {
+         |            ^
+      21 |       const { port } = server.address() as AddressInfo;
+      22 |       resolve({
+      23 |         url: `http://127.0.0.1:${port}`,
+
+      at test/api/mcp-http-server.test.ts:20:12
+      at start (test/api/mcp-http-server.test.ts:18:10)
+      at Object.<anonymous> (test/api/mcp-http-server.test.ts:158:26)
+
+  ● createGateway › returns 500 when the tool handler throws
+
+    thrown: "Exceeded timeout of 5000 ms for a test.
+    Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout."
+
+      at _getError (node_modules/jest-circus/build/jestAdapterInit.js:1985:12)
+          at Array.map (<anonymous>)
+
+    Cause:
+        thrown: "Exceeded timeout of 5000 ms for a test.
+        Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout."
+
+          151 |   });
+          152 |
+        > 153 |   it('returns 500 when the tool handler throws', async () => {
+              |     ^
+          154 |     const callTool = jest
+          155 |       .fn<(n: string, a: Record<string, unknown>) => Promise<unknown>>()
+          156 |       .mockRejectedValue(new Error('boom'));
+
+          at test/api/mcp-http-server.test.ts:153:5
+          at Object.<anonymous> (test/api/mcp-http-server.test.ts:43:9)
+
+  ● createGateway › exposes an unauthenticated health-check endpoint
+
+    listen EPERM: operation not permitted 0.0.0.0
+
+      18 |   return new Promise((resolve) => {
+      19 |     const server = createServer(app);
+    > 20 |     server.listen(0, () => {
+         |            ^
+      21 |       const { port } = server.address() as AddressInfo;
+      22 |       resolve({
+      23 |         url: `http://127.0.0.1:${port}`,
+
+      at test/api/mcp-http-server.test.ts:20:12
+      at start (test/api/mcp-http-server.test.ts:18:10)
+      at Object.<anonymous> (test/api/mcp-http-server.test.ts:174:26)
+
+  ● createGateway › exposes an unauthenticated health-check endpoint
+
+    thrown: "Exceeded timeout of 5000 ms for a test.
+    Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout."
+
+      at _getError (node_modules/jest-circus/build/jestAdapterInit.js:1985:12)
+          at Array.map (<anonymous>)
+
+    Cause:
+        thrown: "Exceeded timeout of 5000 ms for a test.
+        Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout."
+
+          170 |   });
+          171 |
+        > 172 |   it('exposes an unauthenticated health-check endpoint', async () => {
+              |     ^
+          173 |     const app = makeApp(jest.fn<(n: string, a: Record<string, unknown>) => Promise<unknown>>(), 10);
+          174 |     const server = await start(app);
+          175 |
+
+          at test/api/mcp-http-server.test.ts:172:5
+          at Object.<anonymous> (test/api/mcp-http-server.test.ts:43:9)
+
+
+Test Suites: 1 failed, 35 passed, 36 total
+Tests:       8 failed, 193 passed, 201 total
+Snapshots:   0 total
+Time:        67.574 s
+Ran all test suites.

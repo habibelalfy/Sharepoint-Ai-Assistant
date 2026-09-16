@@ -22,6 +22,17 @@ services:
       HTTP_GATEWAY_PORT: 3001
       PGVECTOR_CONNECTION_STRING: postgres://ai:changeme@pgvector:5432/rag
       EMBEDDING_API_BASE_URL: http://embedding-server:80/v1
+      # LLM chat (OpenAI-compatible) — set in .env; empty disables the chat UI.
+      LLM_API_BASE_URL: ${LLM_API_BASE_URL:-}
+      LLM_API_KEY: ${LLM_API_KEY:-not-needed}
+      LLM_MODEL: ${LLM_MODEL:-deepseek-v4-pro}
+      LLM_TEMPERATURE: ${LLM_TEMPERATURE:-0}
+      LLM_MAX_STEPS: ${LLM_MAX_STEPS:-8}
+      AUDIT_LOG_PATH: /app/data/audit.jsonl
+    volumes:
+      - assistant_data:/app/data
+    extra_hosts:
+      - '${SHAREPOINT_HOST_NAME:-bshare}:${SHAREPOINT_HOST_IP:-192.168.122.44}'
     ports:
       - '${HTTP_GATEWAY_PORT:-3001}:3001'
     depends_on:
@@ -58,5 +69,6 @@ services:
       - embedding_cache:/data
 
 volumes:
+  assistant_data: {}
   pgvector_data: {}
   embedding_cache: {}

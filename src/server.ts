@@ -62,6 +62,10 @@ import {
 import { bootstrapBackgroundServices } from './runtime';
 import type { RetrievalService } from './rag/retrieval-service';
 import { createSearchDocumentsHandler, searchDocumentsSchema } from './tools/document-tools';
+import { ProjectServerClient } from './sharepoint/project-server-client';
+import { registerProjectServerTools } from './tools/project-server-tools';
+import { FileAuditService } from './services/file-audit-service';
+import { ProjectWorkspace } from './sharepoint/project-workspace';
 
 type ToolHandler<Args> = (args: Args) => CallToolResult | Promise<CallToolResult>;
 
@@ -109,6 +113,9 @@ async function auditSafely(audit: AuditService, entry: AIActionEntry): Promise<v
 
 /** Injectable server dependencies (overridden in tests). */
 export interface ServerOptions {
+  analytics?: import('./analytics/project-analytics').ProjectAnalytics;
+  projectServer?: ProjectServerClient;
+  projectWorkspace?: ProjectWorkspace;
   audit?: AuditService;
   permissions?: PermissionService;
   retrieval?: RetrievalService;
@@ -132,6 +139,17 @@ export function createServer(
   const server = new McpServer({ name, version });
   const audit = options.audit ?? new SharePointAuditService(client);
   const permissions = options.permissions ?? new PermissionService(undefined, client);
+
+  if (options.projectServer) {
+    registerProjectServerTools(
+      server,
+      options.projectServer,
+      audit,
+      options.projectWorkspace,
+      options.analytics,
+    );
+    return server;
+  }
 
   server.registerTool(
     'query_project_data',
@@ -288,6 +306,21 @@ export async function main(): Promise<void> {
   const { permissions, retrieval } = await bootstrapBackgroundServices(client, config, logger);
 
   const server = createServer(client, config.serviceName, config.serviceVersion, {
+    projectServer:
+      config.dataSource === 'project-server'
+        ? await ProjectServerClient.connect(config.sharepoint)
+        : undefined,
+    projectWorkspace:
+      config.dataSource === 'project-server'
+        ? await ProjectWorkspace.connect(config.sharepoint, {
+            users: config.projectPlan.writeUsers,
+            projects: config.projectPlan.writeProjects,
+          })
+        : undefined,
+    audit:
+      config.dataSource === 'project-server'
+        ? new FileAuditService(config.auditLogPath)
+        : undefined,
     permissions,
     retrieval,
   });

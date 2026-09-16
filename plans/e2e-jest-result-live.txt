@@ -1,0 +1,10 @@
+[email] to=pm@corp.com subject="Overdue items require attention"
+[email] to=pm@corp.com subject="Upcoming milestones"
+[email] to=pm@corp.com subject="Project health check"
+[email] to=a@corp.com, b@corp.com subject="Subject"
+
+Test Suites: 36 passed, 36 total
+Tests:       201 passed, 201 total
+Snapshots:   0 total
+Time:        15.355 s, estimated 64 s
+Ran all test suites.

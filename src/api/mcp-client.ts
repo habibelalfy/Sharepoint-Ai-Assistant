@@ -28,10 +28,18 @@ export async function createMcpToolCaller(
 
   return {
     async callTool(toolName, args) {
-      const result = (await mcpClient.callTool({ name: toolName, arguments: args })) as {
+      const result = (await mcpClient.callTool(
+        { name: toolName, arguments: args },
+        undefined,
+        // Plan publishing performs many sequential Project Server writes and
+        // queue jobs, so it needs far longer than the SDK's 60s default.
+        { timeout: 10 * 60 * 1000 },
+      )) as {
+        isError?: boolean;
         content: Array<{ type: string; text?: string }>;
       };
       const text = result.content.find((block) => block.type === 'text');
+      if (result.isError) throw new Error(text?.text ?? `Tool ${toolName} failed`);
       return text && typeof text.text === 'string' ? parseMaybeJson(text.text) : undefined;
     },
     async listTools() {

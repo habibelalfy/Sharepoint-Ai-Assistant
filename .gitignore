@@ -11,6 +11,9 @@ coverage/
 .env
 .env.*
 !.env.example
+key.txt
+access.txt
+data/
 
 # Logs
 *.log

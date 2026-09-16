@@ -77,6 +77,14 @@ export interface LlmConfig {
   temperature: number;
   /** Tool-calling loop cap (`LLM_MAX_STEPS`). */
   maxSteps: number;
+  /** Maximum completion tokens per LLM turn (`LLM_MAX_TOKENS`). */
+  maxTokens: number;
+}
+
+/** Project Server document access and narrowly scoped plan publishing policy. */
+export interface ProjectPlanConfig {
+  writeUsers: string[];
+  writeProjects: string[];
 }
 
 /** Default cron schedules when env vars are absent (see `.env.example`). */
@@ -95,12 +103,15 @@ const DEFAULT_EMBEDDING_API_KEY = 'not-needed';
 
 /** Default LLM chat tunables when env vars are absent (see `.env.example`). */
 const DEFAULT_LLM_API_KEY = 'not-needed';
-const DEFAULT_LLM_MODEL = 'deepseek-chat';
+const DEFAULT_LLM_MODEL = 'deepseek-v4-pro';
 const DEFAULT_LLM_TEMPERATURE = 0;
 const DEFAULT_LLM_MAX_STEPS = 8;
+const DEFAULT_LLM_MAX_TOKENS = 8192;
 
 /** Fully-assembled application configuration. */
 export interface AppConfig {
+  dataSource: 'lists' | 'project-server';
+  auditLogPath: string;
   serviceName: string;
   serviceVersion: string;
   logLevel: string;
@@ -114,6 +125,7 @@ export interface AppConfig {
   rag: RagConfig;
   /** LLM chat orchestration configuration (OpenAI-compatible endpoint). */
   llm: LlmConfig;
+  projectPlan: ProjectPlanConfig;
 }
 
 /** Returns a trimmed value or throws if the variable is missing/empty. */
@@ -167,6 +179,10 @@ function parseNonNegativeNumber(env: NodeJS.ProcessEnv, key: string, fallback: n
  * @throws {ConfigError} If a required variable is missing or invalid.
  */
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
+  const dataSource = env.SHAREPOINT_DATA_SOURCE ?? 'lists';
+  if (dataSource !== 'lists' && dataSource !== 'project-server') {
+    throw new ConfigError('SHAREPOINT_DATA_SOURCE must be lists or project-server');
+  }
   const siteUrl = requireString(env, 'SHAREPOINT_SITE_URL');
   const username = requireString(env, 'SHAREPOINT_USERNAME');
   const password = requireString(env, 'SHAREPOINT_PASSWORD');
@@ -252,9 +268,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     model: env.LLM_MODEL ?? DEFAULT_LLM_MODEL,
     temperature: parseNonNegativeNumber(env, 'LLM_TEMPERATURE', DEFAULT_LLM_TEMPERATURE),
     maxSteps: parsePositiveInt(env, 'LLM_MAX_STEPS', DEFAULT_LLM_MAX_STEPS),
+    maxTokens: parsePositiveInt(env, 'LLM_MAX_TOKENS', DEFAULT_LLM_MAX_TOKENS),
   };
 
   return {
+    dataSource,
+    auditLogPath: env.AUDIT_LOG_PATH ?? './data/audit.jsonl',
     serviceName: SERVICE_NAME,
     serviceVersion: SERVICE_VERSION,
     logLevel: env.LOG_LEVEL ?? 'info',
@@ -274,5 +293,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     smtp,
     rag,
     llm,
+    projectPlan: {
+      writeUsers: parseList(env.PROJECT_PLAN_WRITE_USERS),
+      writeProjects: parseList(env.PROJECT_PLAN_WRITE_PROJECTS),
+    },
   };
 }

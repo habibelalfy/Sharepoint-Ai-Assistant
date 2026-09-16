@@ -1,0 +1,17 @@
+{
+  "passed": true,
+  "project": {
+    "id": "7333f972-529e-481a-8d4e-14d10d8c0fb5",
+    "title": "project20",
+    "startDate": "2026-09-15T08:00:00",
+    "endDate": "2026-09-15T08:00:00",
+    "percentComplete": 0,
+    "lastPublishedDate": "2026-09-15T02:08:10.32"
+  },
+  "reply": "Created project \"project20\" successfully.\nProject ID: 7333f972-529e-481a-8d4e-14d10d8c0fb5",
+  "checks": [
+    "assistant selected create_project from chat",
+    "successful audited tool execution",
+    "new project verified in SharePoint listing"
+  ]
+}

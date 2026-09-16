@@ -47,7 +47,7 @@ export async function bootstrapBackgroundServices(
   // pgvector store, run the dimension startup check, and schedule the indexer.
   let retrieval: RetrievalService | undefined;
   let indexer: DocumentIndexer | undefined;
-  if (config.rag.enabled) {
+  if (config.rag.enabled && config.dataSource !== 'project-server') {
     const vectorStore = new PgVectorStore(
       config.rag.pgvectorConnectionString,
       config.rag.embeddingDimensions,
@@ -79,7 +79,7 @@ export async function bootstrapBackgroundServices(
   const alertService = new AlertService(client, emailSender, config.alertSchedules, {
     recipients: config.alertRecipients,
   });
-  alertService.startAlertScheduler();
+  if (config.dataSource !== 'project-server') alertService.startAlertScheduler();
 
   // RAG document indexer job (nightly by default).
   if (indexer) {

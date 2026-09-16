@@ -1,3 +1,4 @@
+import { SharePointError } from '../../src/errors';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { describe, expect, it, jest } from '@jest/globals';
@@ -41,6 +42,144 @@ function makeApp(
 }
 
 describe('createGateway', () => {
+  it('still returns JSON 401 when security auditing fails', async () => {
+    const audit = new NoopAuditService();
+    jest.spyOn(audit, 'logSecurityEvent').mockRejectedValue(new Error('Audit storage unavailable'));
+    const server = await start(makeApp(async () => undefined, 10, audit));
+    try {
+      const res = await fetch(`${server.url}/api/mcp/tool`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      });
+      expect(res.status).toBe(401);
+      expect(await res.json()).toEqual({ error: 'unauthorized' });
+    } finally {
+      await server.close();
+    }
+  });
+  it('validates browser sessions without granting anonymous access', async () => {
+    const server = await start(makeApp(async () => undefined, 10));
+    try {
+      expect((await fetch(`${server.url}/api/session`)).status).toBe(401);
+      const token = signHmacToken(SECRET, { sub: 'alice', exp: Date.now() / 1000 + 60 });
+      const res = await fetch(`${server.url}/api/session`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ userId: 'alice' });
+      expect(res.headers.get('cache-control')).toBe('no-store');
+    } finally {
+      await server.close();
+    }
+  });
+  it('accepts all setup fields without returning the submitted secrets', async () => {
+    const configure = jest.fn(async (input: unknown) => {
+      expect(input).toBeDefined();
+      return { userId: 'alice', accessToken: 'session-token' };
+    });
+    const app = createGateway({
+      callTool: async () => undefined,
+      authenticate: createBearerAuthenticator(createHmacTokenVerifier(SECRET)),
+      rateLimiter: new SlidingWindowRateLimiter(10, 60_000),
+      audit: new NoopAuditService(),
+      configure,
+    });
+    const server = await start(app);
+    try {
+      const res = await fetch(`${server.url}/api/setup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sharePointUrl: 'http://sharepoint/PWA/',
+          username: 'DOMAIN\\alice',
+          password: 'sharepoint-secret',
+          llmUrl: 'https://llm.example/v1/',
+          llmKey: 'llm-secret',
+          modelName: 'deepseek-chat',
+        }),
+      });
+      expect(res.status).toBe(200);
+      expect(res.headers.get('cache-control')).toBe('no-store');
+      expect(await res.json()).toEqual({ userId: 'alice', accessToken: 'session-token' });
+      expect(configure).toHaveBeenCalledWith({
+        sharePointUrl: 'http://sharepoint/PWA',
+        username: 'DOMAIN\\alice',
+        password: 'sharepoint-secret',
+        llmUrl: 'https://llm.example/v1',
+        llmKey: 'llm-secret',
+        modelName: 'deepseek-chat',
+      });
+    } finally {
+      await server.close();
+    }
+  });
+  it('returns a generic setup error and does not expose an upstream secret', async () => {
+    const app = createGateway({
+      callTool: async () => undefined,
+      authenticate: createBearerAuthenticator(createHmacTokenVerifier(SECRET)),
+      rateLimiter: new SlidingWindowRateLimiter(10, 60_000),
+      audit: new NoopAuditService(),
+      configure: async (input) => {
+        throw new Error(`NTLM rejected ${input.password}`);
+      },
+    });
+    const server = await start(app);
+    try {
+      const res = await fetch(`${server.url}/api/setup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sharePointUrl: 'http://sharepoint/PWA',
+          username: 'DOMAIN\\alice',
+          password: 'never-return-this',
+          llmUrl: 'https://llm.example/v1',
+          llmKey: 'also-secret',
+          modelName: 'deepseek-chat',
+        }),
+      });
+      expect(res.status).toBe(401);
+      const text = await res.text();
+      expect(text).toContain('Connection failed');
+      expect(text).not.toContain('never-return-this');
+      expect(text).not.toContain('also-secret');
+    } finally {
+      await server.close();
+    }
+  });
+  it('reports server outages separately from credential failures without exposing secrets', async () => {
+    const app = createGateway({
+      callTool: async () => undefined,
+      authenticate: createBearerAuthenticator(createHmacTokenVerifier(SECRET)),
+      rateLimiter: new SlidingWindowRateLimiter(10, 60_000),
+      audit: new NoopAuditService(),
+      configure: async (input) => {
+        throw new SharePointError(`Server failed ${input.password}`, 500, undefined);
+      },
+    });
+    const server = await start(app);
+    try {
+      const res = await fetch(`${server.url}/api/setup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sharePointUrl: 'http://sharepoint/PWA',
+          username: 'DOMAIN\\alice',
+          password: 'never-return-this',
+          llmUrl: 'https://llm.example/v1',
+          llmKey: 'also-secret',
+          modelName: 'deepseek-chat',
+        }),
+      });
+      expect(res.status).toBe(503);
+      const text = await res.text();
+      expect(text).toContain('temporarily unavailable');
+      expect(text).not.toContain('never-return-this');
+      expect(text).not.toContain('also-secret');
+    } finally {
+      await server.close();
+    }
+  });
   it('forwards an authenticated tool call and injects userId', async () => {
     const callTool = jest
       .fn<(n: string, a: Record<string, unknown>) => Promise<unknown>>()

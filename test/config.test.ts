@@ -17,6 +17,15 @@ function without(env: NodeJS.ProcessEnv, key: string): NodeJS.ProcessEnv {
 }
 
 describe('loadConfig', () => {
+  it('supports explicit Project Server mode and rejects unknown sources', () => {
+    expect(loadConfig({ ...validEnv, SHAREPOINT_DATA_SOURCE: 'project-server' }).dataSource).toBe(
+      'project-server',
+    );
+    expect(loadConfig(validEnv).dataSource).toBe('lists');
+    expect(() => loadConfig({ ...validEnv, SHAREPOINT_DATA_SOURCE: 'wrong' })).toThrow(
+      /SHAREPOINT_DATA_SOURCE/,
+    );
+  });
   it('builds a config from valid environment variables', () => {
     const config = loadConfig(validEnv);
     expect(config.sharepoint.siteUrl).toBe('http://sp-server/sites/projects');
@@ -25,6 +34,19 @@ describe('loadConfig', () => {
     expect(config.sharepoint.domain).toBe('CORP');
     expect(config.logLevel).toBe('info');
     expect(config.serviceName).toBe('sharepoint-ai-assistant');
+    expect(config.projectPlan).toEqual({ writeUsers: [], writeProjects: [] });
+  });
+
+  it('parses project-plan write allowlists', () => {
+    const config = loadConfig({
+      ...validEnv,
+      PROJECT_PLAN_WRITE_USERS: ' alice, bob ',
+      PROJECT_PLAN_WRITE_PROJECTS: 'one, two',
+    });
+    expect(config.projectPlan).toEqual({
+      writeUsers: ['alice', 'bob'],
+      writeProjects: ['one', 'two'],
+    });
   });
 
   it('defaults auth mode to kerberos when omitted', () => {
@@ -158,7 +180,7 @@ describe('loadConfig LLM', () => {
   it('disables chat by default and applies defaults', () => {
     const config = loadConfig(validEnv);
     expect(config.llm.enabled).toBe(false);
-    expect(config.llm.model).toBe('deepseek-chat');
+    expect(config.llm.model).toBe('deepseek-v4-pro');
     expect(config.llm.temperature).toBe(0);
     expect(config.llm.maxSteps).toBe(8);
   });

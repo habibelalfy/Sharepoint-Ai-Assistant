@@ -20,7 +20,10 @@ dotenv.config({ quiet: true });
 
 const GATEWAY_PORT = Number(process.env.HTTP_GATEWAY_PORT ?? 3001);
 const SECRET = process.env.JWT_SIGNING_KEY ?? 'changeme';
-const EXPECTED_TOOL_COUNT = 14;
+const PROJECT_SERVER = process.env.SHAREPOINT_DATA_SOURCE === 'project-server';
+const EXPECTED_TOOL_COUNT = PROJECT_SERVER ? 10 : 14;
+const READ_TOOL = PROJECT_SERVER ? 'search_projects' : 'get_user_permissions';
+const READ_ARGS = PROJECT_SERVER ? { query: '', userId: 'smoke-test' } : { userId: 'smoke-test' };
 
 /** Mints an HMAC-signed JWT-style token (same format the gateway verifies). */
 function signToken(claims) {
@@ -50,11 +53,12 @@ async function smokeStdioServer() {
     console.log(`ok tools/list returned ${tools.length} tools`);
 
     const result = await client.callTool({
-      name: 'get_user_permissions',
-      arguments: { userId: 'smoke-test' },
+      name: READ_TOOL,
+      arguments: READ_ARGS,
     });
     const text = result.content.find((block) => block.type === 'text')?.text;
-    console.log(`ok get_user_permissions -> ${text}`);
+    if (result.isError) throw new Error(`MCP tool failed: ${text}`);
+    console.log(`ok ${READ_TOOL} returned data`);
   } finally {
     if (transport.pid) {
       process.kill(transport.pid, 'SIGTERM');
@@ -91,7 +95,7 @@ async function smokeGateway() {
     const res = await fetch(`http://127.0.0.1:${GATEWAY_PORT}/api/mcp/tool`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ toolName: 'get_user_permissions', args: {} }),
+      body: JSON.stringify({ toolName: READ_TOOL, args: READ_ARGS }),
     });
     if (!res.ok) {
       throw new Error(`gateway tool call failed with status ${res.status}`);
