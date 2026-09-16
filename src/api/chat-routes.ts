@@ -3,7 +3,7 @@
  *
  * @module api/chat-routes
  */
-import express, { type Express, type Request, type Response } from 'express';
+import express, { type Express, type Response } from 'express';
 import path from 'node:path';
 import type { ChatAgent } from '../llm/agent';
 import type { ChatMessage } from '../llm/provider';
@@ -39,7 +39,7 @@ export function mountChatRoutes(app: Express, options: ChatRouteOptions): void {
     // Opt-in streaming: the client sends `stream: true` and reads an SSE body.
     // Without it, the endpoint keeps returning `{ reply }` exactly as before.
     if (body.stream === true) {
-      await streamChatResponse(req, res, options.agent, messages, identity.userId);
+      await streamChatResponse(res, options.agent, messages, identity.userId);
       return;
     }
 
@@ -68,7 +68,6 @@ interface ChatSseEvent {
 
 /** Streams an agent answer to the client as Server-Sent Events. */
 async function streamChatResponse(
-  req: Request,
   res: Response,
   agent: Pick<ChatAgent, 'chatStream'>,
   messages: ChatMessage[],
@@ -82,7 +81,11 @@ async function streamChatResponse(
   res.flushHeaders();
 
   const controller = new AbortController();
-  req.on('close', () => controller.abort());
+  res.on('close', () => {
+    // Abort the upstream stream only when the client disconnects before the
+    // answer finishes (a normal `res.end()` sets `writableEnded`, so no abort).
+    if (!res.writableEnded) controller.abort();
+  });
 
   const send = (event: ChatSseEvent): void => {
     if (res.writableEnded) return;
