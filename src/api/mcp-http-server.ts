@@ -315,7 +315,11 @@ export async function main(): Promise<void> {
   // The route delegates to the current runtime, allowing the setup form to
   // replace both clients without restarting the process.
   mountChatRoutes(app, {
-    agent: { chat: (messages, userId) => active.agent.chat(messages, userId) },
+    agent: {
+      chat: (messages, userId) => active.agent.chat(messages, userId),
+      chatStream: (messages, userId, onContent, onStatus, signal) =>
+        active.agent.chatStream(messages, userId, onContent, onStatus, signal),
+    },
     authenticate,
     rateLimiter,
   });

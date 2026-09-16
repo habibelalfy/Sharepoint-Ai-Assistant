@@ -145,4 +145,49 @@ describe('OpenAiCompatibleLLMProvider', () => {
       /status 401; code invalid_api_key; type authentication_error; Incorrect API key provided: sk-redacted/,
     );
   });
+
+  it('streams deltas and merges fragmented tool-call arguments', async () => {
+    async function* chunkStream() {
+      yield { choices: [{ delta: { content: 'Hel' } }] };
+      yield { choices: [{ delta: { content: 'lo' } }] };
+      yield {
+        choices: [
+          {
+            delta: {
+              tool_calls: [
+                { index: 0, id: 'call_1', function: { name: 'query', arguments: '{"a":' } },
+              ],
+            },
+          },
+        ],
+      };
+      yield {
+        choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: '1}' } }] } }],
+      };
+    }
+    const create = jest
+      .fn<(body: unknown, options?: unknown) => Promise<unknown>>()
+      .mockResolvedValue(chunkStream());
+    (OpenAI as unknown as jest.Mock).mockImplementation(() => ({
+      chat: { completions: { create } },
+    }));
+
+    const provider = new OpenAiCompatibleLLMProvider(options);
+    const deltas: string[] = [];
+    const result = await provider.completeStream(
+      [{ role: 'user', content: 'hi' }],
+      undefined,
+      (delta) => deltas.push(delta),
+    );
+
+    expect(deltas).toEqual(['Hel', 'lo']);
+    expect(result.content).toBe('Hello');
+    expect(result.toolCalls).toEqual([
+      { id: 'call_1', type: 'function', function: { name: 'query', arguments: '{"a":1}' } },
+    ]);
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({ stream: true }),
+      expect.anything(),
+    );
+  });
 });

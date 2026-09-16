@@ -53,9 +53,34 @@ interface ChatCompletionResponse {
   }>;
 }
 
+/** Minimal structural shape of an OpenAI streaming chat-completion chunk. */
+interface ChatCompletionChunk {
+  choices?: Array<{
+    delta?: {
+      content?: string | null;
+      tool_calls?: Array<{
+        index?: number;
+        id?: string;
+        function?: { name?: string; arguments?: string };
+      }>;
+    };
+  }>;
+}
+
 /** Generates chat completions (with optional tool-calling). */
 export interface ILLMProvider {
   complete(messages: ChatMessage[], tools?: ToolDefinition[]): Promise<CompletionResult>;
+  /**
+   * Streams a single completion, invoking `onContent` for each text delta and
+   * returning the accumulated content + tool calls once the stream finishes.
+   * Optional so non-streaming providers (and test doubles) remain valid.
+   */
+  completeStream?(
+    messages: ChatMessage[],
+    tools: ToolDefinition[] | undefined,
+    onContent: (delta: string) => void,
+    signal?: AbortSignal,
+  ): Promise<CompletionResult>;
 }
 
 /** Options for {@link OpenAiCompatibleLLMProvider}. */
@@ -96,17 +121,7 @@ export class OpenAiCompatibleLLMProvider implements ILLMProvider {
     tools?: ToolDefinition[],
   ): Promise<CompletionResult> {
     try {
-      const body = {
-        model: this.model,
-        messages,
-        tools: tools && tools.length > 0 ? tools : undefined,
-        temperature: this.temperature,
-        stream: false,
-        max_tokens: this.maxTokens,
-        ...(this.isDeepSeek
-          ? { thinking: { type: 'disabled' }, reasoning_effort: 'low' }
-          : {}),
-      } as unknown as ChatCreateParams;
+      const body = this.buildBody(messages, tools, false);
 
       const response = (await this.client.chat.completions.create(
         body,
@@ -122,16 +137,83 @@ export class OpenAiCompatibleLLMProvider implements ILLMProvider {
         })),
       };
     } catch (cause) {
-      if (cause instanceof Error && /Connection|Timeout/.test(cause.name)) {
-      throw new LLMProviderError(
+      throw this.wrapError(cause);
+    }
+  }
+
+  public async completeStream(
+    messages: ChatMessage[],
+    tools: ToolDefinition[] | undefined,
+    onContent: (delta: string) => void,
+    signal?: AbortSignal,
+  ): Promise<CompletionResult> {
+    try {
+      const body = this.buildBody(messages, tools, true);
+
+      const stream = (await this.client.chat.completions.create(body, {
+        signal,
+      })) as unknown as AsyncIterable<ChatCompletionChunk>;
+
+      let content = '';
+      const toolCalls = new Map<number, { id: string; name: string; arguments: string }>();
+
+      for await (const chunk of stream) {
+        const delta = chunk.choices?.[0]?.delta;
+        if (!delta) continue;
+        if (delta.content) {
+          content += delta.content;
+          onContent(delta.content);
+        }
+        for (const fragment of delta.tool_calls ?? []) {
+          const index = fragment.index ?? 0;
+          const existing = toolCalls.get(index) ?? { id: '', name: '', arguments: '' };
+          if (fragment.id) existing.id = fragment.id;
+          if (fragment.function?.name) existing.name += fragment.function.name;
+          if (fragment.function?.arguments) existing.arguments += fragment.function.arguments;
+          toolCalls.set(index, existing);
+        }
+      }
+
+      return {
+        content: content || null,
+        toolCalls: Array.from(toolCalls.values()).map((call) => ({
+          id: call.id,
+          type: 'function' as const,
+          function: { name: call.name, arguments: call.arguments },
+        })),
+      };
+    } catch (cause) {
+      throw this.wrapError(cause);
+    }
+  }
+
+  /** Builds the provider request body (shared by streaming and non-streaming). */
+  private buildBody(
+    messages: ChatMessage[],
+    tools: ToolDefinition[] | undefined,
+    stream: boolean,
+  ): ChatCreateParams {
+    return {
+      model: this.model,
+      messages,
+      tools: tools && tools.length > 0 ? tools : undefined,
+      temperature: this.temperature,
+      stream,
+      max_tokens: this.maxTokens,
+      ...(this.isDeepSeek ? { thinking: { type: 'disabled' }, reasoning_effort: 'low' } : {}),
+    } as unknown as ChatCreateParams;
+  }
+
+  private wrapError(cause: unknown): LLMProviderError {
+    if (cause instanceof Error && /Connection|Timeout/.test(cause.name)) {
+      return new LLMProviderError(
         'Cannot reach the LLM server or the request timed out. Check that the model server is running and reachable from Docker, then retry.',
         { cause },
       );
-      }
-      throw new LLMProviderError(`LLM completion request failed${providerErrorHint(cause)}`, {
-        cause,
-      });
     }
+    return new LLMProviderError(`LLM completion request failed${providerErrorHint(cause)}`, {
+      cause,
+    });
   }
 }
 

@@ -3,7 +3,7 @@
  *
  * @module api/chat-routes
  */
-import express, { type Express } from 'express';
+import express, { type Express, type Request, type Response } from 'express';
 import path from 'node:path';
 import type { ChatAgent } from '../llm/agent';
 import type { ChatMessage } from '../llm/provider';
@@ -11,7 +11,7 @@ import type { Authenticator } from './mcp-http-server';
 import type { SlidingWindowRateLimiter } from './rate-limiter';
 
 export interface ChatRouteOptions {
-  agent: Pick<ChatAgent, 'chat'>;
+  agent: Pick<ChatAgent, 'chat' | 'chatStream'>;
   authenticate: Authenticator;
   rateLimiter: SlidingWindowRateLimiter;
 }
@@ -29,9 +29,17 @@ export function mountChatRoutes(app: Express, options: ChatRouteOptions): void {
       return;
     }
 
-    const messages = parseMessages((req.body ?? {}) as { messages?: unknown });
+    const body = (req.body ?? {}) as { messages?: unknown; stream?: unknown };
+    const messages = parseMessages(body);
     if (messages === null) {
       res.status(400).json({ error: 'messages must be a non-empty array of { role, content }' });
+      return;
+    }
+
+    // Opt-in streaming: the client sends `stream: true` and reads an SSE body.
+    // Without it, the endpoint keeps returning `{ reply }` exactly as before.
+    if (body.stream === true) {
+      await streamChatResponse(req, res, options.agent, messages, identity.userId);
       return;
     }
 
@@ -48,6 +56,53 @@ export function mountChatRoutes(app: Express, options: ChatRouteOptions): void {
   app.get('/', (_req, res) => {
     res.sendFile(path.join(publicDir, 'index.html'));
   });
+}
+
+/** SSE event wire shape sent as `data: {…}` lines. */
+interface ChatSseEvent {
+  type: 'content' | 'status' | 'done' | 'error';
+  text?: string;
+  reply?: string;
+  message?: string;
+}
+
+/** Streams an agent answer to the client as Server-Sent Events. */
+async function streamChatResponse(
+  req: Request,
+  res: Response,
+  agent: Pick<ChatAgent, 'chatStream'>,
+  messages: ChatMessage[],
+  userId: string,
+): Promise<void> {
+  res.status(200);
+  res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+
+  const controller = new AbortController();
+  req.on('close', () => controller.abort());
+
+  const send = (event: ChatSseEvent): void => {
+    if (res.writableEnded) return;
+    res.write(`data: ${JSON.stringify(event)}\n\n`);
+  };
+
+  try {
+    const reply = await agent.chatStream(
+      messages,
+      userId,
+      (delta) => send({ type: 'content', text: delta }),
+      (status) => send({ type: 'status', text: status }),
+      controller.signal,
+    );
+    send({ type: 'done', reply });
+  } catch (error) {
+    send({ type: 'error', message: error instanceof Error ? error.message : String(error) });
+  } finally {
+    if (!res.writableEnded) res.end();
+  }
 }
 
 /** Validates an incoming conversation, returning `ChatMessage[]` or null. */

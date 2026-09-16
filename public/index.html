@@ -569,6 +569,69 @@
         messagesEl.scrollTop = messagesEl.scrollHeight;
       }
 
+      async function streamReply(history) {
+        const div = document.createElement('div');
+        div.className = 'msg assistant';
+        div.style.overflowWrap = 'anywhere';
+        messagesEl.appendChild(div);
+        let reply = '';
+        let statusText = '';
+        const render = () => {
+          div.textContent = statusText ? reply + (reply ? '\n' : '') + '… ' + statusText : reply;
+          messagesEl.scrollTop = messagesEl.scrollHeight;
+        };
+        try {
+          const response = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + activeToken },
+            body: JSON.stringify({ messages: history, stream: true }),
+          });
+          if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data.error || 'HTTP ' + response.status);
+          }
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            let boundary;
+            while ((boundary = buffer.indexOf('\n\n')) >= 0) {
+              const raw = buffer.slice(0, boundary);
+              buffer = buffer.slice(boundary + 2);
+              for (const line of raw.split('\n')) {
+                if (!line.startsWith('data: ')) continue;
+                let event;
+                try {
+                  event = JSON.parse(line.slice(6));
+                } catch {
+                  continue;
+                }
+                if (event.type === 'content') {
+                  reply += event.text || '';
+                  statusText = '';
+                } else if (event.type === 'status') {
+                  statusText = event.text || '';
+                } else if (event.type === 'error') {
+                  throw new Error(event.message || 'stream error');
+                }
+              }
+              render();
+            }
+          }
+          statusText = '';
+          render();
+          return reply || '(the assistant returned no answer)';
+        } catch (error) {
+          div.className = 'msg system';
+          div.textContent = 'Error: ' + error.message;
+          messagesEl.scrollTop = messagesEl.scrollHeight;
+          return null;
+        }
+      }
+
       chatForm.addEventListener('submit', async (event) => {
         event.preventDefault();
         const text = input.value.trim();
@@ -578,20 +641,13 @@
         const history = [...messages, { role: 'user', content: text }];
         send.disabled = true;
         try {
-          const response = await fetch('/api/chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + activeToken },
-            body: JSON.stringify({ messages: history }),
-          });
-          const data = await response.json().catch(() => ({}));
-          if (!response.ok) throw new Error(data.error || 'HTTP ' + response.status);
-          addMessage('assistant', data.reply);
-          messages.push(
-            { role: 'user', content: text },
-            { role: 'assistant', content: data.reply },
-          );
-        } catch (error) {
-          addMessage('system', 'Error: ' + error.message);
+          const reply = await streamReply(history);
+          if (reply !== null) {
+            messages.push(
+              { role: 'user', content: text },
+              { role: 'assistant', content: reply },
+            );
+          }
         } finally {
           send.disabled = !activeToken;
         }

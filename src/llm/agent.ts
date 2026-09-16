@@ -10,7 +10,13 @@
  */
 import { LLMProviderError } from '../errors';
 import { buildToolCatalog, renderSystemPrompt } from '../prompts/system-prompt';
-import type { ChatMessage, ILLMProvider, ToolCall, ToolDefinition } from './provider';
+import type {
+  ChatMessage,
+  CompletionResult,
+  ILLMProvider,
+  ToolCall,
+  ToolDefinition,
+} from './provider';
 
 /** MCP tool-calling surface (implemented by the in-process MCP client). */
 export interface ToolCaller {
@@ -40,78 +46,11 @@ export class ChatAgent {
   public async chat(history: ChatMessage[], userId?: string): Promise<string> {
     const maxSteps = this.options.maxSteps ?? DEFAULT_MAX_STEPS;
     const catalogTools = await this.tools.listTools();
-    const latest = history[history.length - 1];
-    const creationName = latest?.role === 'user' ? projectCreationName(latest.content ?? '') : null;
-    if (creationName && catalogTools.some((tool) => tool.name === 'create_project')) {
-      if (!userId) throw new Error('Authentication is required to create a project.');
-      const result = (await this.tools.callTool('create_project', {
-        name: creationName,
-        userId,
-      })) as {
-        status?: string;
-        project?: { id?: string; title?: string };
-      } | null;
-      if (
-        !result?.project?.id ||
-        !result.project.title ||
-        !['created', 'already_exists'].includes(result.status ?? '')
-      ) {
-        throw new Error('Project creation was not verified. Check Project Server before retrying.');
-      }
-      return result.status === 'created'
-        ? `Created project "${result.project.title}" successfully.\nProject ID: ${result.project.id}`
-        : `Project "${result.project.title}" already exists. No duplicate was created.\nProject ID: ${result.project.id}`;
-    }
-    const documentProject =
-      latest?.role === 'user' ? documentListingProject(latest.content ?? '') : null;
-    if (documentProject && catalogTools.some((tool) => tool.name === 'search_project_documents')) {
-      const result = (await this.tools.callTool('search_project_documents', {
-        projectName: documentProject,
-        query: '',
-        userId,
-      })) as {
-        projectName?: string;
-        documents?: Array<{ name: string; library: string; url: string }>;
-      } | null;
-      if (!result || !Array.isArray(result.documents))
-        throw new Error('Invalid document listing response.');
-      const projectName = result.projectName ?? documentProject;
-      if (result.documents.length === 0)
-        return `No documents were found in the accessible document libraries of ${projectName}.`;
-      return [
-        `${result.documents.length} document(s) in ${projectName}:`,
-        ...result.documents.map(
-          (doc, index) => `${index + 1}. ${doc.name}\n   Library: ${doc.library}\n   ${doc.url}`,
-        ),
-      ].join('\n');
-    }
-    if (
-      latest?.role === 'user' &&
-      isProjectListing(latest.content ?? '') &&
-      catalogTools.some((tool) => tool.name === 'list_projects')
-    ) {
-      const projects = await this.tools.callTool('list_projects', { userId });
-      if (!Array.isArray(projects)) throw new Error('Invalid project listing response.');
-      if (projects.length === 0) {
-        return 'No published projects are accessible to the configured SharePoint account.';
-      }
-      return [
-        `${projects.length} published projects accessible to the configured SharePoint account:`,
-        ...projects.map((project, index) => `${index + 1}. ${project.title} (ID: ${project.id})`),
-      ].join('\n');
-    }
+    const direct = await this.resolveDirectAnswer(history, catalogTools, userId);
+    if (direct !== null) return direct;
+
     const toolDefinitions = catalogTools.map(toToolDefinition);
-    const systemPrompt = renderSystemPrompt(
-      buildToolCatalog(
-        catalogTools.map((tool) => ({
-          name: tool.name,
-          description: tool.description,
-          inputSchema: tool.inputSchema as
-            | { type?: string; properties?: Record<string, unknown>; required?: string[] }
-            | undefined,
-        })),
-      ),
-    );
+    const systemPrompt = this.buildSystemPrompt(catalogTools);
 
     const messages: ChatMessage[] = [{ role: 'system', content: systemPrompt }, ...history];
 
@@ -137,6 +76,162 @@ export class ChatAgent {
     }
 
     throw new LLMProviderError(`Chat did not converge within ${maxSteps} tool-call steps`);
+  }
+
+  /**
+   * Streaming variant of {@link chat}: invokes `onContent` for each text delta as
+   * the final answer is generated and `onStatus` (when provided) before each tool
+   * call so the UI can show progress. Returns the complete answer once finished.
+   */
+  public async chatStream(
+    history: ChatMessage[],
+    userId: string | undefined,
+    onContent: (delta: string) => void,
+    onStatus?: (message: string) => void,
+    signal?: AbortSignal,
+  ): Promise<string> {
+    const maxSteps = this.options.maxSteps ?? DEFAULT_MAX_STEPS;
+    const catalogTools = await this.tools.listTools();
+
+    const direct = await this.resolveDirectAnswer(history, catalogTools, userId);
+    if (direct !== null) {
+      onContent(direct);
+      return direct;
+    }
+
+    const toolDefinitions = catalogTools.map(toToolDefinition);
+    const systemPrompt = this.buildSystemPrompt(catalogTools);
+    const messages: ChatMessage[] = [{ role: 'system', content: systemPrompt }, ...history];
+
+    for (let step = 0; step < maxSteps; step += 1) {
+      const result = await this.completeTurn(messages, toolDefinitions, onContent, signal);
+      if (result.toolCalls.length === 0) {
+        return result.content ?? '(the model returned no answer)';
+      }
+
+      messages.push({
+        role: 'assistant',
+        content: result.content,
+        tool_calls: result.toolCalls,
+      });
+
+      for (const call of result.toolCalls) {
+        onStatus?.(`Calling ${call.function.name}…`);
+        messages.push({
+          role: 'tool',
+          tool_call_id: call.id,
+          content: await this.executeTool(call, userId),
+        });
+      }
+    }
+
+    throw new LLMProviderError(`Chat did not converge within ${maxSteps} tool-call steps`);
+  }
+
+  /**
+   * Short-circuits unambiguous commands (create project, document inventory,
+   * project listing) without an LLM round-trip. Returns the answer or null when
+   * the request must go through the model.
+   */
+  private async resolveDirectAnswer(
+    history: ChatMessage[],
+    catalogTools: Array<{ name: string }>,
+    userId?: string,
+  ): Promise<string | null> {
+    const latest = history[history.length - 1];
+    if (latest?.role !== 'user') return null;
+    const text = latest.content ?? '';
+
+    const creationName = projectCreationName(text);
+    if (creationName && catalogTools.some((tool) => tool.name === 'create_project')) {
+      if (!userId) throw new Error('Authentication is required to create a project.');
+      const result = (await this.tools.callTool('create_project', {
+        name: creationName,
+        userId,
+      })) as {
+        status?: string;
+        project?: { id?: string; title?: string };
+      } | null;
+      if (
+        !result?.project?.id ||
+        !result.project.title ||
+        !['created', 'already_exists'].includes(result.status ?? '')
+      ) {
+        throw new Error('Project creation was not verified. Check Project Server before retrying.');
+      }
+      return result.status === 'created'
+        ? `Created project "${result.project.title}" successfully.\nProject ID: ${result.project.id}`
+        : `Project "${result.project.title}" already exists. No duplicate was created.\nProject ID: ${result.project.id}`;
+    }
+
+    const documentProject = documentListingProject(text);
+    if (documentProject && catalogTools.some((tool) => tool.name === 'search_project_documents')) {
+      const result = (await this.tools.callTool('search_project_documents', {
+        projectName: documentProject,
+        query: '',
+        userId,
+      })) as {
+        projectName?: string;
+        documents?: Array<{ name: string; library: string; url: string }>;
+      } | null;
+      if (!result || !Array.isArray(result.documents))
+        throw new Error('Invalid document listing response.');
+      const projectName = result.projectName ?? documentProject;
+      if (result.documents.length === 0)
+        return `No documents were found in the accessible document libraries of ${projectName}.`;
+      return [
+        `${result.documents.length} document(s) in ${projectName}:`,
+        ...result.documents.map(
+          (doc, index) => `${index + 1}. ${doc.name}\n   Library: ${doc.library}\n   ${doc.url}`,
+        ),
+      ].join('\n');
+    }
+
+    if (isProjectListing(text) && catalogTools.some((tool) => tool.name === 'list_projects')) {
+      const projects = await this.tools.callTool('list_projects', { userId });
+      if (!Array.isArray(projects)) throw new Error('Invalid project listing response.');
+      if (projects.length === 0) {
+        return 'No published projects are accessible to the configured SharePoint account.';
+      }
+      return [
+        `${projects.length} published projects accessible to the configured SharePoint account:`,
+        ...projects.map((project, index) => `${index + 1}. ${project.title} (ID: ${project.id})`),
+      ].join('\n');
+    }
+
+    return null;
+  }
+
+  /** Runs one completion turn, streaming deltas when the provider supports it. */
+  private async completeTurn(
+    messages: ChatMessage[],
+    toolDefinitions: ToolDefinition[],
+    onContent: (delta: string) => void,
+    signal?: AbortSignal,
+  ): Promise<CompletionResult> {
+    if (this.provider.completeStream) {
+      return this.provider.completeStream(messages, toolDefinitions, onContent, signal);
+    }
+    const result = await this.provider.complete(messages, toolDefinitions);
+    if (result.content) onContent(result.content);
+    return result;
+  }
+
+  /** Renders the system prompt for the current tool catalog. */
+  private buildSystemPrompt(
+    catalogTools: Array<{ name: string; description?: string; inputSchema?: unknown }>,
+  ): string {
+    return renderSystemPrompt(
+      buildToolCatalog(
+        catalogTools.map((tool) => ({
+          name: tool.name,
+          description: tool.description,
+          inputSchema: tool.inputSchema as
+            | { type?: string; properties?: Record<string, unknown>; required?: string[] }
+            | undefined,
+        })),
+      ),
+    );
   }
 
   private async executeTool(call: ToolCall, userId?: string): Promise<string> {

@@ -242,4 +242,94 @@ describe('ChatAgent.chat', () => {
       agent.chat([{ role: 'user', content: 'show project data' }], 'u'),
     ).rejects.toBeInstanceOf(LLMProviderError);
   });
+
+  it('streams the final answer deltas in order', async () => {
+    type CompleteStream = NonNullable<ILLMProvider['completeStream']>;
+    const completeStream = jest
+      .fn<CompleteStream>()
+      .mockImplementation(async (_m, _t, onContent) => {
+        onContent('the ');
+        onContent('answer');
+        return { content: 'the answer', toolCalls: [] };
+      });
+    const callTool = jest.fn<ToolCaller['callTool']>();
+    const listTools = jest.fn<ToolCaller['listTools']>().mockResolvedValue(toolList());
+    const agent = new ChatAgent(
+      { complete: jest.fn<ILLMProvider['complete']>(), completeStream },
+      { callTool, listTools },
+    );
+    const deltas: string[] = [];
+    await expect(
+      agent.chatStream([{ role: 'user', content: 'hi' }], 'alice', (d) => deltas.push(d)),
+    ).resolves.toBe('the answer');
+    expect(deltas).toEqual(['the ', 'answer']);
+    expect(callTool).not.toHaveBeenCalled();
+  });
+
+  it('executes tool calls then streams the final answer', async () => {
+    type CompleteStream = NonNullable<ILLMProvider['completeStream']>;
+    const completeStream = jest
+      .fn<CompleteStream>()
+      .mockResolvedValueOnce({
+        content: null,
+        toolCalls: [
+          {
+            id: 'c1',
+            type: 'function',
+            function: { name: 'query_project_data', arguments: '{"listName":"Projects"}' },
+          },
+        ],
+      })
+      .mockImplementationOnce(async (_m, _t, onContent) => {
+        onContent('3 ');
+        onContent('projects');
+        return { content: '3 projects', toolCalls: [] };
+      });
+    const callTool = jest.fn<ToolCaller['callTool']>().mockResolvedValue([{ id: 1 }]);
+    const listTools = jest.fn<ToolCaller['listTools']>().mockResolvedValue(toolList());
+    const agent = new ChatAgent(
+      { complete: jest.fn<ILLMProvider['complete']>(), completeStream },
+      { callTool, listTools },
+    );
+    const deltas: string[] = [];
+    const statuses: string[] = [];
+    await expect(
+      agent.chatStream(
+        [{ role: 'user', content: 'show projects' }],
+        'alice',
+        (d) => deltas.push(d),
+        (s) => statuses.push(s),
+      ),
+    ).resolves.toBe('3 projects');
+    expect(callTool).toHaveBeenCalledWith('query_project_data', {
+      listName: 'Projects',
+      userId: 'alice',
+    });
+    expect(deltas).toEqual(['3 ', 'projects']);
+    expect(statuses).toEqual(['Calling query_project_data…']);
+  });
+
+  it('emits a direct (non-LLM) answer as a single delta', async () => {
+    const callTool = jest.fn<ToolCaller['callTool']>().mockResolvedValue({
+      status: 'created',
+      project: { id: 'guid', title: 'project20' },
+    });
+    const listTools = jest
+      .fn<ToolCaller['listTools']>()
+      .mockResolvedValue([{ name: 'create_project' }]);
+    const agent = new ChatAgent(
+      { complete: jest.fn<ILLMProvider['complete']>() },
+      { callTool, listTools },
+    );
+    const deltas: string[] = [];
+    await expect(
+      agent.chatStream(
+        [{ role: 'user', content: 'create new project project20' }],
+        'alice',
+        (d) => deltas.push(d),
+      ),
+    ).resolves.toContain('Created project');
+    expect(deltas).toHaveLength(1);
+    expect(deltas[0]).toContain('Created project');
+  });
 });
